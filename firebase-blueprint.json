@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "User Profile",
+      "description": "Public profile information for the user",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "avatarEmoji": { "type": "string" },
+        "lastActive": { "type": "string", "format": "date-time" }
+      },
+      "required": ["username", "avatarEmoji", "lastActive"]
+    },
+    "LeaderboardEntry": {
+      "title": "Leaderboard Entry",
+      "description": "Performance metrics for the global leaderboard",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "avatarEmoji": { "type": "string" },
+        "totalStars": { "type": "number" },
+        "currentLevel": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "username", "avatarEmoji", "totalStars", "currentLevel", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "Profile",
+      "description": "User profiles"
+    },
+    "/leaderboard/{userId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Global leaderboard entries"
+    }
+  }
+}

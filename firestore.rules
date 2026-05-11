@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation for Profile
+    function isValidProfile(data) {
+      return data.keys().hasAll(['username', 'avatarEmoji', 'lastActive']) &&
+             data.keys().size() == 3 &&
+             data.username is string && data.username.size() >= 1 && data.username.size() <= 50 &&
+             data.avatarEmoji is string && data.avatarEmoji.size() >= 1 && data.avatarEmoji.size() <= 20 &&
+             data.lastActive is timestamp;
+    }
+
+    // Validation for LeaderboardEntry
+    function isValidLeaderboardEntry(data) {
+      return data.keys().hasAll(['userId', 'username', 'avatarEmoji', 'totalStars', 'currentLevel', 'updatedAt']) &&
+             data.keys().size() == 6 &&
+             data.userId == request.auth.uid &&
+             data.username is string && data.username.size() >= 1 && data.username.size() <= 50 &&
+             data.avatarEmoji is string && data.avatarEmoji.size() >= 1 && data.avatarEmoji.size() <= 20 &&
+             data.totalStars is int && data.totalStars >= 0 &&
+             data.currentLevel is int && data.currentLevel >= 1 &&
+             data.updatedAt == request.time;
+    }
+
+    // User profiles match block
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isOwner(userId) && isValidProfile(incoming());
+      allow update: if isOwner(userId) && 
+                      isValidProfile(incoming()) && 
+                      (incoming().diff(existing()).affectedKeys().hasOnly(['username', 'avatarEmoji', 'lastActive']));
+    }
+
+    // Leaderboard match block
+    match /leaderboard/{userId} {
+      allow read: if true; // Allow anyone to read single docs or list/query the collection
+      allow create: if isOwner(userId) && isValidLeaderboardEntry(incoming());
+      allow update: if isOwner(userId) && 
+                      isValidLeaderboardEntry(incoming()) && 
+                      (incoming().diff(existing()).affectedKeys().hasOnly(['totalStars', 'currentLevel', 'updatedAt', 'username', 'avatarEmoji']));
+    }
+  }
+}
