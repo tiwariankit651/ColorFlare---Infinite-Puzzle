@@ -6,7 +6,7 @@ import { GameBoard } from './GameBoard';
 import { Level } from '../types';
 
 interface DailyChallengeScreenProps {
-  onComplete: (stars: number) => void;
+  onComplete: (stats: { stars: number, moves: number, time: number }) => void;
   onBack: () => void;
   palette?: string[];
 }
@@ -23,6 +23,8 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({ onCo
   const [showComplete, setShowComplete] = useState(false);
   const [movesLeft, setMovesLeft] = useState(30);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [moveCount, setMoveCount] = useState(0);
+  const [startTime] = useState(Date.now());
 
   // Generate a seed based on the current date
   const today = new Date().toISOString().split('T')[0];
@@ -41,13 +43,15 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({ onCo
 
   const handleComplete = () => {
     setShowComplete(true);
+    const duration = Math.floor((Date.now() - startTime) / 1000);
     setTimeout(() => {
       setShowComplete(false);
-      onComplete(10); // Higher reward for daily
+      onComplete({ stars: 10, moves: moveCount, time: duration });
     }, 1500);
   };
 
   const handleMove = () => {
+    setMoveCount(prev => prev + 1);
     setMovesLeft(prev => {
         if (prev <= 1) {
             setIsGameOver(true);

@@ -18,6 +18,9 @@ import { ThemeName, MusicStyle, AccentColor } from './types';
 import { sounds } from './lib/sounds';
 import { GameStorage } from './logic/storage';
 import { LeaderboardService } from './services/leaderboardService';
+import { motion, AnimatePresence } from 'motion/react';
+import { AchievementService, Achievement } from './services/achievementService';
+import confetti from 'canvas-confetti';
 
 type Screen = 'splash' | 'home' | 'game' | 'settings' | 'levelSelect' | 'daily' | 'login' | 'profile' | 'leaderboard';
 
@@ -52,6 +55,7 @@ export default function App() {
   const [accentColor, setAccentColor] = useState<AccentColor>(data.accentColor || 'green');
   const [volume, setVolume] = useState(data.volume || 0.5);
   const [gameLevel, setGameLevel] = useState<number | null>(null);
+  const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
   
   const [hasSeenTutorial, setHasSeenTutorial] = useState(() => {
     return localStorage.getItem('colorflow_tutorial') === 'true';
@@ -63,78 +67,137 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Daily Streak Logic
+    const lastVisit = data.lastDailyVisit;
+    const today = new Date().toDateString();
+    
+    if (lastVisit !== today) {
+      let nextStreak = data.dailyStreak || 0;
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      if (lastVisit === yesterday.toDateString()) {
+        nextStreak += 1;
+      } else {
+        nextStreak = 1;
+      }
+
+      // Rewards for streak
+      let bonusStars = 2; // Baseline
+      let bonusHints = 0;
+      if (nextStreak % 5 === 0) bonusHints = 1;
+      if (nextStreak % 10 === 0) bonusStars += 10;
+
+      setData(prev => ({
+        ...prev,
+        dailyStreak: nextStreak,
+        lastDailyVisit: today,
+        stars: prev.stars + bonusStars,
+        hintsRemaining: (prev.hintsRemaining || 0) + bonusHints
+      }));
+      
+      if (bonusHints > 0) {
+        console.log(`Streak Reward! ${bonusHints} hints added.`);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // Check for achievements
+    const earned = AchievementService.getNewAchievements(data);
+    if (earned.length > 0) {
+      setNewAchievements(prev => [...prev, ...earned]);
+      setData(prev => ({
+        ...prev,
+        achievements: [...(prev.achievements || []), ...earned.map(a => a.id)],
+        stars: prev.stars + earned.reduce((sum, a) => sum + a.rewardStars, 0)
+      }));
+      
+      // Fire confetti for big achievements
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+    }
+  }, [data]);
+
+  useEffect(() => {
     // Apply accent color to CSS variable
     document.documentElement.style.setProperty('--accent-color', ACCENT_COLORS_MAP[accentColor]);
   }, [accentColor]);
 
   useEffect(() => {
-    GameStorage.saveData({ 
-      soundOn, 
-      musicOn,
-      level: data.level,
-      stars: data.stars,
-      bestLevel: data.bestLevel,
-      theme: data.theme,
-      palette: data.palette,
-      musicStyle,
-      accentColor,
-      volume
-    });
+    GameStorage.saveData(data);
     sounds.setEnabled(soundOn);
     sounds.setMusicEnabled(musicOn);
     sounds.setMusicStyle(musicStyle);
     sounds.setVolume(volume);
-  }, [soundOn, musicOn, musicStyle, accentColor, volume, data.level, data.stars, data.bestLevel, data.theme, data.palette]);
+  }, [data, soundOn, musicOn, musicStyle, volume]);
+
+  useEffect(() => {
+    setData(prev => ({ ...prev, soundOn, musicOn, musicStyle, accentColor, volume }));
+  }, [soundOn, musicOn, musicStyle, accentColor, volume]);
 
   const currentTheme = data.theme || themes[Math.floor((data.level - 1) / 10) % themes.length];
 
-  const handleLevelComplete = (starsEarned: number) => {
+  useEffect(() => {
+    if (newAchievements.length > 0) {
+      const timer = setTimeout(() => {
+        setNewAchievements(prev => prev.slice(1));
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [newAchievements]);
+
+  const handleLevelComplete = ({ stars: starsEarned, moves, time }: { stars: number, moves: number, time: number }) => {
     const activeLvl = gameLevel || data.level;
     
-    setData(prev => {
-      const oldLevelStars = prev.levelStars || {};
-      const oldStarsForLevel = oldLevelStars[activeLvl] || 0;
-      
-      // Only update total stars if we got more than before on this level
-      const starDifference = Math.max(0, starsEarned - oldStarsForLevel);
-      const nextStars = prev.stars + starDifference;
-      
-      const nextLevelStars = { 
-        ...oldLevelStars, 
-        [activeLvl]: Math.max(oldStarsForLevel, starsEarned) 
-      };
+    // Calculate new values outside to avoid side effects in state updater
+    const oldLevelStars = data.levelStars || {};
+    const oldStarsForLevel = oldLevelStars[activeLvl] || 0;
+    const starDifference = Math.max(0, starsEarned - oldStarsForLevel);
+    const nextStars = data.stars + starDifference;
+    
+    let nextLevel = data.level;
+    let nextBestLevel = data.bestLevel;
+    if (gameLevel === null || gameLevel === data.level) {
+      nextLevel = data.level + 1;
+      if (nextLevel > nextBestLevel) nextBestLevel = nextLevel;
+    }
 
-      let nextLevel = prev.level;
-      let nextBestLevel = prev.bestLevel;
+    if (starsEarned === 3) {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#FFD700', '#FFA500', '#FFFFFF']
+      });
+    }
 
-      if (gameLevel === null || gameLevel === prev.level) {
-        nextLevel = prev.level + 1;
-        if (nextLevel > nextBestLevel) nextBestLevel = nextLevel;
-      }
+    const nextData = { 
+      ...data, 
+      stars: nextStars, 
+      levelStars: { ...oldLevelStars, [activeLvl]: Math.max(oldStarsForLevel, starsEarned) },
+      level: nextLevel, 
+      bestLevel: nextBestLevel,
+      totalGamesPlayed: (data.totalGamesPlayed || 0) + 1,
+      totalMoves: (data.totalMoves || 0) + moves,
+      totalTimeSeconds: (data.totalTimeSeconds || 0) + time,
+      threeStarLevels: (data.threeStarLevels || 0) + (starsEarned === 3 ? 1 : 0)
+    };
 
-      const nextData = { 
-        ...prev, 
-        stars: nextStars, 
-        levelStars: nextLevelStars,
-        level: nextLevel, 
-        bestLevel: nextBestLevel,
-        totalGamesPlayed: prev.totalGamesPlayed + 1
-      };
-      
-      GameStorage.saveData(nextData);
-
-      // Sync with global leaderboard if username exists
-      if (nextData.username) {
-        LeaderboardService.submitScore(
-          nextData.username,
-          nextData.avatarEmoji,
-          nextStars,
-          nextLevel
-        ).catch(e => console.error("Leaderboard sync failed", e));
-      }
-
-      return nextData;
-    });
+    setData(nextData);
+    
+    // Side effect: Sync with global leaderboard if username exists
+    if (nextData.username) {
+      LeaderboardService.submitScore(
+        nextData.username,
+        nextData.avatarEmoji,
+        nextStars,
+        nextLevel
+      ).catch(e => console.error("Leaderboard sync failed", e));
+    }
     
     if (gameLevel === data.level || gameLevel === null) {
       setGameLevel(null);
@@ -178,6 +241,8 @@ export default function App() {
         <HomeScreen 
           level={data.level} 
           stars={data.stars} 
+          streak={data.dailyStreak || 0}
+          hints={data.hintsRemaining || 0}
           theme={currentTheme} 
           avatar={data.avatarEmoji}
           onPlay={() => { playClick(); setScreen('game'); }} 
@@ -202,11 +267,35 @@ export default function App() {
       )}
       {screen === 'daily' && (
         <DailyChallengeScreen 
-          onComplete={(starsEarned) => {
+          onComplete={(stats) => {
             sounds.playComplete();
-            const nextStars = data.stars + starsEarned;
-            setData(prev => ({ ...prev, stars: nextStars }));
-            GameStorage.saveData({ stars: nextStars });
+            confetti({
+              particleCount: 200,
+              spread: 120,
+              origin: { y: 0.6 }
+            });
+
+            const nextStars = data.stars + stats.stars;
+            const nextDailyCount = (data.dailyChallengesCompleted || 0) + 1;
+            const nextData = { 
+              ...data, 
+              stars: nextStars,
+              dailyChallengesCompleted: nextDailyCount,
+              totalMoves: (data.totalMoves || 0) + stats.moves,
+              totalTimeSeconds: (data.totalTimeSeconds || 0) + stats.time
+            };
+
+            setData(nextData);
+
+            // Sync with leaderboard
+            if (nextData.username) {
+              LeaderboardService.submitScore(
+                nextData.username,
+                nextData.avatarEmoji,
+                nextData.stars,
+                nextData.level
+              ).catch(e => console.error("Leaderboard sync failed", e));
+            }
             setScreen('home');
           }}
           onBack={() => { playClick(); setScreen('home'); }}
@@ -223,10 +312,13 @@ export default function App() {
             setScreen('home'); 
           }} 
           onHintUsed={() => {
-            const nextHints = data.hintsUsed + 1;
-            setData(prev => ({ ...prev, hintsUsed: nextHints }));
-            GameStorage.saveData({ hintsUsed: nextHints });
+            setData(prev => ({ 
+              ...prev, 
+              hintsUsed: (prev.hintsUsed || 0) + 1,
+              hintsRemaining: Math.max(0, (prev.hintsRemaining || 0) - 1)
+            }));
           }}
+          hintsRemaining={data.hintsRemaining || 0}
           palette={data.palette}
           theme={currentTheme}
         />
@@ -251,6 +343,31 @@ export default function App() {
           onVolumeChange={(v) => { setVolume(v); }}
         />
       )}
+
+      {/* Achievement Notifications */}
+      <AnimatePresence>
+        {newAchievements.length > 0 && (
+          <motion.div 
+            key={newAchievements[0].id}
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-white/10 backdrop-blur-xl border border-white/20 p-4 rounded-3xl flex items-center gap-4 shadow-2xl"
+          >
+            <div className="w-12 h-12 bg-yellow-500 rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-yellow-500/20">
+              {newAchievements[0].icon}
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black uppercase tracking-widest text-yellow-500">Achievement Unlocked!</span>
+              <span className="text-sm font-black text-white">{newAchievements[0].title}</span>
+              <span className="text-[10px] text-white/50">{newAchievements[0].description}</span>
+            </div>
+            <div className="bg-white/5 px-3 py-1 rounded-xl border border-white/10 ml-2">
+               <span className="text-xs font-black text-yellow-500">+{newAchievements[0].rewardStars} ⭐</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -16,6 +16,10 @@ interface StorageData {
   longestWinStreak: number;
   dailyChallengesCompleted: number;
   hintsUsed: number;
+  hintsRemaining: number;
+  achievements: string[];
+  lastDailyVisit?: string;
+  dailyStreak: number;
   levelStars: Record<number, number>;
   username: string;
   avatarEmoji: string;
@@ -39,6 +43,9 @@ const DEFAULT_DATA: StorageData = {
   longestWinStreak: 0,
   dailyChallengesCompleted: 0,
   hintsUsed: 0,
+  hintsRemaining: 3,
+  achievements: [],
+  dailyStreak: 0,
   levelStars: {},
   username: '',
   avatarEmoji: '😀',

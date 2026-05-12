@@ -7,14 +7,16 @@ import { GameBoard } from './GameBoard';
 import { TutorialOverlay } from './TutorialOverlay';
 import { GameStorage } from '../logic/storage';
 import { sounds } from '../lib/sounds';
+import confetti from 'canvas-confetti';
 
 interface GameScreenProps {
   currentLevel: number;
-  onComplete: (stars: number) => void;
+  onComplete: (stats: { stars: number, moves: number, time: number }) => void;
   onBack: () => void;
   palette?: string[];
   theme?: ThemeName;
   onHintUsed?: () => void;
+  hintsRemaining?: number;
 }
 
 const DEFAULT_COLORS = [
@@ -32,7 +34,7 @@ const PERFECT_MSGS = ['💯 Perfect!', '✨ Brilliant!', '🌟 Superb!', '🚀 A
 const GREAT_MSGS = ['💪 Great Job!', '👏 Well Done!', '🔥 On Fire!', '⭐ Amazing!'];
 const GOOD_MSGS = ['🎉 Hurray!', '🏆 Congrats!', '😎 Cool!', '🥳 Happy!'];
 
-export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete, onBack, onHintUsed, palette, theme }) => {
+export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete, onBack, onHintUsed, palette, theme, hintsRemaining = 0 }) => {
   const gameColors = palette || DEFAULT_COLORS;
   const generator = useMemo(() => new LevelGenerator(), []);
 
@@ -204,17 +206,29 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
       randomMsg = GOOD_MSGS[Math.floor(Math.random() * GOOD_MSGS.length)];
     }
     setCelebrationMsg(randomMsg);
+    
+    setTimeout(() => {
+      confetti({
+        particleCount: 150,
+        spread: 100,
+        origin: { y: 0.6 },
+        colors: gameColors
+      });
+    }, 300);
 
-    GameStorage.saveData({
-      totalGamesPlayed: (GameStorage.getData().totalGamesPlayed || 0) + 1,
-      totalMoves: (GameStorage.getData().totalMoves || 0) + moveCount,
-      totalTimeSeconds: (GameStorage.getData().totalTimeSeconds || 0) + duration,
-      threeStarLevels: (GameStorage.getData().threeStarLevels || 0) + (earned === 3 ? 1 : 0),
-    });
 
     setShowComplete(true);
     setConfettiActive(true);
     sounds.playComplete();
+    
+    // Auto-advance stats to App via a small delay or on button click
+    // But we need to call onComplete with full stats
+  };
+
+  const handleNextLevel = () => {
+    setShowComplete(false);
+    setConfettiActive(false);
+    onComplete({ stars: starsEarned, moves: moveCount, time: completionTime });
   };
 
   const triggerShake = () => {
@@ -241,11 +255,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
   };
 
   const useHint = () => {
-    if (!canUseHint) return;
+    if (showingSolution) return;
     
-    setAdReason('hint');
-    setIsWatchingAd(true);
-    setAdTimeElapsed(0);
+    if (hintsRemaining > 0) {
+      triggerHintLogic();
+    } else {
+      setAdReason('hint');
+      setIsWatchingAd(true);
+      setAdTimeElapsed(0);
+    }
   };
 
   const triggerSkip = () => {
@@ -299,9 +317,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     }, displayDuration);
   };
 
-  const isHintUnlocked = moveCount >= HINT_MOVES_REQUIRED;
+  const isHintUnlocked = moveCount >= 5; // Reduced from 40 for better accessibility
   const isCooldownOver = cooldownRemaining === 0;
-  const canUseHint = isHintUnlocked && isCooldownOver && !showingSolution;
+  const canUseHint = isCooldownOver && !showingSolution;
 
   if (!level) return null;
   const bgGradient = getThemeGradient(theme);
@@ -342,7 +360,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
             <button 
               onClick={useHint} 
               disabled={!canUseHint}
-              className={`relative p-2 md:p-4 rounded-lg md:rounded-2xl transition-all shadow-xl ${
+              className={`relative p-2 md:p-4 rounded-lg md:rounded-2xl transition-all shadow-xl flex items-center gap-2 ${
                 canUseHint 
                   ? 'text-black bg-yellow-500 hover:scale-105 active:scale-95 shadow-yellow-500/20' 
                   : 'text-white/10 bg-white/5'
@@ -375,6 +393,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
                 </svg>
               )}
               <Lightbulb size={18} className="md:w-6 md:h-6" fill={canUseHint ? "black" : "none"} />
+              {canUseHint && (
+                <span className="text-xs font-black mr-1">
+                  {hintsRemaining > 0 ? hintsRemaining : '+'}
+                </span>
+              )}
             </button>
           
           {!canUseHint && isHintUnlocked && cooldownRemaining > 0 && (
@@ -606,11 +629,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
 
                     <div className="flex flex-col gap-3 w-full">
                       <button 
-                        onClick={() => {
-                          setShowComplete(false);
-                          setConfettiActive(false);
-                          onComplete(starsEarned);
-                        }}
+                        onClick={handleNextLevel}
                         className="w-full bg-yellow-500 text-black py-4 rounded-2xl font-black italic tracking-widest hover:scale-105 active:scale-95 transition-transform shadow-xl"
                       >
                         NEXT LEVEL ▶

@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { ArrowLeft, LogOut, Star, Trophy, Gamepad2, Lightbulb, Clock, TrendingUp, Cloud, Check } from 'lucide-react';
 import { GameStorage } from '../logic/storage';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell as ReCell } from 'recharts';
+import { ACHIEVEMENTS } from '../services/achievementService';
 
 interface ProfileScreenProps {
   data: any;
@@ -20,6 +21,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ data, onBack, onLo
   ];
 
   const threeStarRate = data.level > 1 ? Math.round((data.threeStarLevels / (data.level - 1)) * 100) : 0;
+  
+  const earnedAchievements = data.achievements || [];
 
   const StatItem = ({ label, value, icon: Icon, color }: { label: string, value: string | number, icon: any, color: string }) => (
     <div className="bg-white/5 rounded-3xl p-5 flex items-center justify-between border border-white/5 shadow-inner">
@@ -89,6 +92,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ data, onBack, onLo
             color="bg-cyan-500" 
           />
           <StatItem label="Hints Used" value={data.hintsUsed} icon={Lightbulb} color="bg-green-500" />
+        </div>
+
+        <div className="bg-white/5 rounded-[32px] p-6 border border-white/5 mb-12">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-white/30 mb-6 text-center">Achievements</h3>
+          <div className="grid grid-cols-4 gap-3">
+            {ACHIEVEMENTS.map((a) => {
+              const isEarned = earnedAchievements.includes(a.id);
+              return (
+                <div 
+                  key={a.id}
+                  className={`aspect-square rounded-2xl flex flex-col items-center justify-center transition-all ${
+                    isEarned ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' : 'bg-white/5 text-white/5 grayscale opacity-20'
+                  }`}
+                  title={`${a.title}: ${a.description}`}
+                >
+                  <span className="text-xl">{a.icon}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="bg-white/5 rounded-[32px] p-6 border border-white/5 mb-12">

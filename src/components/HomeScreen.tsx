@@ -6,6 +6,8 @@ import { ThemeName } from '../types';
 interface HomeScreenProps {
   level: number;
   stars: number;
+  streak: number;
+  hints: number;
   theme: ThemeName;
   avatar: string;
   onPlay: () => void;
@@ -16,7 +18,7 @@ interface HomeScreenProps {
   onLeaderboard: () => void;
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, theme, avatar, onPlay, onLevels, onDaily, onSettings, onProfile, onLeaderboard }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, streak, hints, theme, avatar, onPlay, onLevels, onDaily, onSettings, onProfile, onLeaderboard }) => {
   const getThemeGradient = (themeName: ThemeName) => {
     switch (themeName) {
       case 'forest': return 'from-green-900 to-green-500';
@@ -94,7 +96,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, theme, ava
             <span className="text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)] text-xl">⭐</span>
             <span className="text-xl font-black italic tracking-tighter text-white">{stars}</span>
           </div>
+          <div className="w-px h-5 bg-white/20" />
+          <div className="flex items-center gap-2">
+            <span className="text-yellow-500 text-xl">💡</span>
+            <span className="text-xl font-black italic tracking-tighter text-white">{hints}</span>
+          </div>
         </div>
+        
+        {streak > 0 && (
+          <motion.div 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="flex items-center gap-2 bg-orange-500/20 px-3 py-1 rounded-full border border-orange-500/30"
+          >
+            <span className="text-orange-500 font-black italic text-[10px]">🔥 STREAK: {streak} DAYS</span>
+          </motion.div>
+        )}
         <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">THEME: {theme.toUpperCase()}</div>
       </motion.div>
 
