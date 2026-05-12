@@ -1,0 +1,23 @@
+{
+  "name": "ColorFlow: Zen Puzzle",
+  "short_name": "ColorFlow",
+  "description": "A relaxing color-based puzzle game to find your flow.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#10b981",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/extension/res-export/ic_extension_black_48dp.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/extension/res-export/ic_extension_black_48dp.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
