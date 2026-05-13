@@ -3,7 +3,8 @@ const ASSETS_TO_CACHE = [
   './',
   'index.html',
   'manifest.json',
-  'icon.png',
+  'icon-192.png',
+  'icon-512.png',
   'screenshots/home_screen.png',
   'screenshots/gameplay_action.png',
   'screenshots/level_selection.png'

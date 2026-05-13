@@ -38,9 +38,9 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
           transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           className="text-8xl mb-12 drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
         >
-          <img src="icon.png" alt="ColorFlow" className="w-32 h-32 rounded-[2.5rem]" 
+          <img src="/icon-512.png" alt="ColorFlow" className="w-32 h-32 rounded-[2.5rem]" 
                onError={(e) => {
-                 // Fallback if icon.png is missing
+                 // Fallback if icon missing
                  (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIHJ4PSI4MCIgZmlsbD0id2hpdGUiLz48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjE4MCIgZmlsbD0idXJsKCNwYWludDBfbGluZWFyXzFfMikiLz48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9InBhaW50MF9saW5lYXJfMV8yIiB4MT0iNzYiIHkxPSI3NiIgeDI9IjQzNiIgeTI9IjQzNiIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPjxzdG9wIHN0b3AtY29sb3I9IiMxMEI5ODEiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMzQjgyRjYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48L3N2Zz4=';
                }}
           />

@@ -109,7 +109,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, streak, hi
           transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
           className="text-8xl mb-8 drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
         >
-          <img src="icon.png" alt="ColorFlow" className="w-32 h-32 mx-auto rounded-3xl" />
+          <img src="/icon-512.png" alt="ColorFlow" className="w-32 h-32 mx-auto rounded-3xl" />
         </motion.div>
         <h1 className="text-7xl font-black tracking-tighter drop-shadow-2xl">ColorFlow</h1>
         <p className="text-white/50 font-bold tracking-[0.3em] mt-3 uppercase text-xs">Infinite Puzzle</p>
