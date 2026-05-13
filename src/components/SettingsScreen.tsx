@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { ThemeName, MusicStyle, AccentColor } from '../types';
 import { ChevronLeft, Volume2, VolumeX, Music, Music2, Share2, Star, Wind, Zap, Moon, Leaf } from 'lucide-react';
 
@@ -79,15 +80,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col text-white">
-      <header className="flex items-center p-6 border-b border-white/5">
-        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full transition-colors mr-4">
-          <ChevronLeft size={28} />
+    <div className="fixed inset-0 bg-[#064e3b] flex flex-col text-white overflow-hidden">
+      {/* Background Blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div 
+          animate={{ x: [0, 40, 0], y: [0, 40, 0], scale: [1, 1.2, 1] }}
+          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+          className="absolute -top-1/4 -right-1/4 w-[80vw] h-[80vw] bg-white rounded-full opacity-5 blur-[120px]"
+        />
+      </div>
+
+      <header className="flex items-center p-6 border-b border-white/5 bg-black/20 backdrop-blur-xl sticky top-0 z-50">
+        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-xl transition-colors mr-4 bg-white/5">
+          <ChevronLeft size={24} />
         </button>
-        <h2 className="text-2xl font-black italic tracking-tighter">SETTINGS</h2>
+        <h2 className="text-xl font-black italic tracking-tighter uppercase px-2">Settings</h2>
       </header>
 
-      <main className="flex-1 p-6 max-w-lg mx-auto w-full space-y-4 overflow-y-auto">
+      <main className="flex-1 p-6 max-w-lg mx-auto w-full space-y-5 overflow-y-auto z-10 custom-scrollbar">
         <div className="bg-white/5 rounded-3xl overflow-hidden border border-white/5">
           <button 
             onClick={onToggleSound}

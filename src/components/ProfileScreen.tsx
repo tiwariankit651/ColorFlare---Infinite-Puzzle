@@ -37,14 +37,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ data, onBack, onLo
   );
 
   return (
-    <div className="fixed inset-0 bg-[#121212] p-8 text-white overflow-y-auto">
-      <div className="max-w-md mx-auto">
+    <div className="fixed inset-0 bg-[#064e3b] p-8 text-white overflow-y-auto overflow-x-hidden">
+      {/* Background Blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div 
+          animate={{ x: [0, -40, 0], y: [0, 40, 0] }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute bottom-0 right-0 w-[80vw] h-[80vw] bg-yellow-500 rounded-full opacity-10 blur-[100px]"
+        />
+      </div>
+
+      <div className="max-w-md mx-auto z-10 relative">
         <div className="flex items-center justify-between mb-12">
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             onClick={onBack}
-            className="p-3 bg-white/5 rounded-2xl"
+            className="p-3 bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10"
           >
             <ArrowLeft size={24} />
           </motion.button>

@@ -19,31 +19,57 @@ interface HomeScreenProps {
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, streak, hints, theme, avatar, onPlay, onLevels, onDaily, onSettings, onProfile, onLeaderboard }) => {
-  const getThemeGradient = (themeName: ThemeName) => {
+  const getThemeColors = (themeName: ThemeName) => {
     switch (themeName) {
-      case 'forest': return 'from-green-900 to-green-500';
-      case 'ocean': return 'from-blue-900 to-blue-400';
-      case 'space': return 'from-indigo-950 to-purple-600';
-      case 'candy': return 'from-pink-800 to-yellow-500';
-      case 'desert': return 'from-orange-800 to-yellow-600';
-      case 'arctic': return 'from-slate-800 to-slate-400';
-      case 'volcano': return 'from-red-900 to-orange-600';
-      case 'garden': return 'from-green-800 to-green-300';
-      case 'city': return 'from-slate-900 to-gray-600';
-      case 'clouds': return 'from-indigo-700 to-blue-100';
-      default: return 'from-green-900 to-green-500';
+      case 'forest': return { bg: 'bg-[#064e3b]', accent: '#10b981', secondary: '#065f46' };
+      case 'ocean': return { bg: 'bg-[#0c4a6e]', accent: '#0ea5e9', secondary: '#075985' };
+      case 'space': return { bg: 'bg-[#1e1b4b]', accent: '#8b5cf6', secondary: '#312e81' };
+      case 'candy': return { bg: 'bg-[#831843]', accent: '#ec4899', secondary: '#9d174d' };
+      case 'desert': return { bg: 'bg-[#7c2d12]', accent: '#f97316', secondary: '#9a3412' };
+      case 'arctic': return { bg: 'bg-[#334155]', accent: '#94a3b8', secondary: '#1e293b' };
+      case 'volcano': return { bg: 'bg-[#7f1d1d]', accent: '#ef4444', secondary: '#991b1b' };
+      case 'garden': return { bg: 'bg-[#14532d]', accent: '#22c55e', secondary: '#166534' };
+      case 'city': return { bg: 'bg-[#0f172a]', accent: '#64748b', secondary: '#1e293b' };
+      case 'clouds': return { bg: 'bg-[#1e3a8a]', accent: '#60a5fa', secondary: '#1e40af' };
+      default: return { bg: 'bg-[#064e3b]', accent: '#10b981', secondary: '#065f46' };
     }
   };
 
+  const colors = getThemeColors(theme);
+
   return (
-    <div className={`fixed inset-0 bg-gradient-to-br ${getThemeGradient(theme)} flex flex-col items-center justify-center text-white overflow-hidden p-6`}>
+    <div className={`fixed inset-0 ${colors.bg} flex flex-col items-center justify-center text-white overflow-hidden p-6`}>
+      {/* Bio-morphic Background Blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div 
+          animate={{ 
+            x: [0, 100, 0], 
+            y: [0, -50, 0],
+            scale: [1, 1.2, 1]
+          }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute -top-1/4 -right-1/4 w-[80vw] h-[80vw] rounded-full opacity-30 blur-[100px]"
+          style={{ background: `radial-gradient(circle, ${colors.accent} 0%, transparent 70%)` }}
+        />
+        <motion.div 
+          animate={{ 
+            x: [0, -100, 0], 
+            y: [0, 100, 0],
+            scale: [1, 1.3, 1]
+          }}
+          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+          className="absolute -bottom-1/4 -left-1/4 w-[90vw] h-[90vw] rounded-full opacity-20 blur-[120px]"
+          style={{ background: `radial-gradient(circle, ${colors.secondary} 0%, transparent 70%)` }}
+        />
+      </div>
+
       <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-[60]">
         <div className="flex gap-4">
           <motion.button
             whileHover={{ scale: 1.1, rotate: 15 }}
             whileTap={{ scale: 0.9 }}
             onClick={onSettings}
-            className="p-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 hover:bg-white/20 transition-colors shadow-lg active:bg-white/30"
+            className="p-3 bg-black/20 backdrop-blur-xl rounded-2xl border border-white/10 hover:bg-white/10 transition-colors shadow-lg active:bg-white/20"
           >
             <Settings size={22} className="text-white/70" />
           </motion.button>
@@ -52,7 +78,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, streak, hi
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             onClick={onLeaderboard}
-            className="p-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 hover:bg-white/20 transition-colors shadow-lg active:bg-white/30"
+            className="p-3 bg-black/20 backdrop-blur-xl rounded-2xl border border-white/10 hover:bg-white/10 transition-colors shadow-lg active:bg-white/20"
           >
             <Trophy size={22} className="text-yellow-400" />
           </motion.button>
@@ -62,7 +88,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, streak, hi
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={onProfile}
-          className="p-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 hover:bg-white/20 transition-colors shadow-lg active:bg-white/30"
+          className="p-3 bg-black/20 backdrop-blur-xl rounded-2xl border border-white/10 hover:bg-white/10 transition-colors shadow-lg active:bg-white/20"
         >
           {avatar ? (
             <span className="text-2xl w-6 h-6 flex items-center justify-center">{avatar}</span>
@@ -75,77 +101,105 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, streak, hi
       <motion.div 
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="text-center"
+        transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+        className="text-center z-10"
       >
-        <span className="text-8xl mb-6 block drop-shadow-lg">🎨</span>
-        <h1 className="text-6xl font-black tracking-tighter drop-shadow-md">ColorFlow</h1>
-        <p className="text-white/70 font-medium tracking-widest mt-2 uppercase">Infinite Puzzle</p>
+        <motion.div
+          animate={{ y: [0, -10, 0] }}
+          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          className="text-8xl mb-8 drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+        >
+          <img src="icon.png" alt="ColorFlow" className="w-32 h-32 mx-auto rounded-3xl" />
+        </motion.div>
+        <h1 className="text-7xl font-black tracking-tighter drop-shadow-2xl">ColorFlow</h1>
+        <p className="text-white/50 font-bold tracking-[0.3em] mt-3 uppercase text-xs">Infinite Puzzle</p>
       </motion.div>
 
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.3 }}
-        className="mt-12 flex flex-col items-center gap-4"
+        transition={{ delay: 0.6 }}
+        className="mt-12 flex flex-col items-center gap-5 z-10"
       >
-        <div className="bg-white/10 backdrop-blur-md border border-white/20 px-6 py-3 rounded-full flex items-center gap-4 shadow-xl">
-          <div className="text-xl font-black italic tracking-tighter text-white">LEVEL {level}</div>
-          <div className="w-px h-5 bg-white/20" />
-          <div className="flex items-center gap-2">
-            <span className="text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)] text-xl">⭐</span>
-            <span className="text-xl font-black italic tracking-tighter text-white">{stars}</span>
+        <div className="bg-white/5 backdrop-blur-2xl border border-white/10 px-8 py-4 rounded-[2.5rem] flex items-center gap-6 shadow-2xl">
+          <div className="flex flex-col items-center">
+            <span className="text-[10px] font-black tracking-widest text-white/40 uppercase mb-0.5">Level</span>
+            <span className="text-2xl font-black italic tracking-tighter leading-none">{level}</span>
           </div>
-          <div className="w-px h-5 bg-white/20" />
-          <div className="flex items-center gap-2">
-            <span className="text-yellow-500 text-xl">💡</span>
-            <span className="text-xl font-black italic tracking-tighter text-white">{hints}</span>
+          <div className="w-px h-8 bg-white/10" />
+          <div className="flex flex-col items-center">
+            <span className="text-[10px] font-black tracking-widest text-white/40 uppercase mb-0.5">Stars</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-yellow-400 text-lg">⭐</span>
+              <span className="text-2xl font-black italic tracking-tighter leading-none">{stars}</span>
+            </div>
+          </div>
+          <div className="w-px h-8 bg-white/10" />
+          <div className="flex flex-col items-center">
+            <span className="text-[10px] font-black tracking-widest text-white/40 uppercase mb-0.5">Hints</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-yellow-500 text-lg">💡</span>
+              <span className="text-2xl font-black italic tracking-tighter leading-none">{hints}</span>
+            </div>
           </div>
         </div>
         
         {streak > 0 && (
           <motion.div 
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="flex items-center gap-2 bg-orange-500/20 px-3 py-1 rounded-full border border-orange-500/30"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', delay: 1 }}
+            className="flex items-center gap-2 bg-orange-500/20 px-4 py-1.5 rounded-full border border-orange-500/30 backdrop-blur-md"
           >
-            <span className="text-orange-500 font-black italic text-[10px]">🔥 STREAK: {streak} DAYS</span>
+            <span className="text-orange-500 font-black italic text-[11px] tracking-widest">🔥 STREAK: {streak} DAYS</span>
           </motion.div>
         )}
-        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">THEME: {theme.toUpperCase()}</div>
+        <div className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20">THEME: {theme.toUpperCase()}</div>
       </motion.div>
 
-      <div className="flex flex-col gap-4 mt-16 w-full max-w-[240px]">
+      <div className="flex flex-col gap-4 mt-16 w-full max-w-[280px] z-10">
         <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ scale: 1.02, y: -2 }}
+          whileTap={{ scale: 0.98 }}
           onClick={onPlay}
-          className="bg-white text-black py-5 rounded-full flex items-center justify-center gap-3 shadow-2xl overflow-hidden group relative"
+          className="bg-white text-black py-5 rounded-[2rem] flex items-center justify-center gap-3 shadow-2xl overflow-hidden group relative"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-500" />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 opacity-20" />
           <Play fill="black" size={24} />
-          <span className="text-2xl font-black italic">PLAY</span>
+          <span className="text-2xl font-black italic tracking-tight">PLAY NOW</span>
         </motion.button>
 
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={onDaily}
-          className="bg-accent text-black py-4 rounded-full flex items-center justify-center gap-3 border border-white/20 shadow-[0_0_20px_rgba(var(--accent-color),0.3)]"
-        >
-          <span className="text-lg font-black italic tracking-widest">DAILY CHALLENGE</span>
-        </motion.button>
+        <div className="grid grid-cols-2 gap-3">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onDaily}
+            className="bg-white/10 backdrop-blur-xl text-white py-4 rounded-[1.5rem] flex flex-col items-center justify-center gap-1 border border-white/10 transition-all hover:bg-white/20"
+          >
+            <span className="text-[10px] font-black tracking-widest opacity-50">DAILY</span>
+            <span className="text-sm font-black italic">CHALLENGE</span>
+          </motion.button>
 
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={onLevels}
-          className="bg-white/10 backdrop-blur-md text-white py-4 rounded-full flex items-center justify-center gap-3 border border-white/20 transition-colors hover:bg-white/20"
-        >
-          <span className="text-lg font-black italic tracking-widest">LEVELS</span>
-        </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onLevels}
+            className="bg-white/10 backdrop-blur-xl text-white py-4 rounded-[1.5rem] flex flex-col items-center justify-center gap-1 border border-white/10 transition-all hover:bg-white/20"
+          >
+            <span className="text-[10px] font-black tracking-widest opacity-50">BEYOND</span>
+            <span className="text-sm font-black italic">LEVELS</span>
+          </motion.button>
+        </div>
       </div>
 
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.5 }}
+        className="absolute bottom-10 left-0 right-0 text-center"
+      >
+        <p className="text-[10px] font-black tracking-[0.8em] text-white/10 uppercase">Never Stop Flowing</p>
+      </motion.div>
     </div>
   );
 };

@@ -38,19 +38,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
   const gameColors = palette || DEFAULT_COLORS;
   const generator = useMemo(() => new LevelGenerator(), []);
 
-  const getThemeGradient = (themeName?: ThemeName) => {
+  const getThemeColors = (themeName?: ThemeName) => {
     switch (themeName) {
-      case 'forest': return 'from-green-950 to-green-900';
-      case 'ocean': return 'from-blue-950 to-blue-900';
-      case 'space': return 'from-indigo-950 to-purple-950';
-      case 'candy': return 'from-red-950 to-pink-900';
-      case 'desert': return 'from-orange-950 to-yellow-900';
-      case 'arctic': return 'from-slate-900 to-slate-800';
-      case 'volcano': return 'from-red-950 to-orange-950';
-      case 'garden': return 'from-green-950 to-emerald-950';
-      case 'city': return 'from-slate-950 to-gray-900';
-      case 'clouds': return 'from-indigo-900 to-blue-800';
-      default: return 'from-[#0a0a0a] to-[#0a0a0a]';
+      case 'forest': return { bg: 'bg-[#064e3b]', accent: '#10b981', secondary: '#065f46' };
+      case 'ocean': return { bg: 'bg-[#0c4a6e]', accent: '#0ea5e9', secondary: '#075985' };
+      case 'space': return { bg: 'bg-[#1e1b4b]', accent: '#8b5cf6', secondary: '#312e81' };
+      case 'candy': return { bg: 'bg-[#831843]', accent: '#ec4899', secondary: '#9d174d' };
+      case 'desert': return { bg: 'bg-[#7c2d12]', accent: '#f97316', secondary: '#9a3412' };
+      case 'arctic': return { bg: 'bg-[#334155]', accent: '#94a3b8', secondary: '#1e293b' };
+      case 'volcano': return { bg: 'bg-[#7f1d1d]', accent: '#ef4444', secondary: '#991b1b' };
+      case 'garden': return { bg: 'bg-[#14532d]', accent: '#22c55e', secondary: '#166534' };
+      case 'city': return { bg: 'bg-[#0f172a]', accent: '#64748b', secondary: '#1e293b' };
+      case 'clouds': return { bg: 'bg-[#1e3a8a]', accent: '#60a5fa', secondary: '#1e40af' };
+      default: return { bg: 'bg-[#0a0a0a]', accent: '#10b981', secondary: '#1f2937' };
     }
   };
 
@@ -322,11 +322,35 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
   const canUseHint = isCooldownOver && !showingSolution;
 
   if (!level) return null;
-  const bgGradient = getThemeGradient(theme);
+  const colors = getThemeColors(theme);
 
   return (
-    <div className={`fixed inset-0 bg-gradient-to-br ${bgGradient} flex flex-col text-white pt-secure`}>
-      <header className="flex items-center justify-between px-2 py-2 md:p-6 bg-black/20 backdrop-blur-sm border-b border-white/5 sticky top-0 z-50">
+    <div className={`fixed inset-0 ${colors.bg} flex flex-col text-white pt-secure overflow-hidden`}>
+      {/* Background Blobs for Zen Feel */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div 
+          animate={{ 
+            x: [0, 50, 0], 
+            y: [0, 30, 0],
+            scale: [1, 1.1, 1]
+          }}
+          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+          className="absolute -top-1/4 -right-1/4 w-[70vw] h-[70vw] rounded-full opacity-20 blur-[100px]"
+          style={{ background: `radial-gradient(circle, ${colors.accent} 0%, transparent 70%)` }}
+        />
+        <motion.div 
+          animate={{ 
+            x: [0, -50, 0], 
+            y: [0, -30, 0],
+            scale: [1, 1.2, 1]
+          }}
+          transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+          className="absolute -bottom-1/4 -left-1/4 w-[80vw] h-[80vw] rounded-full opacity-10 blur-[120px]"
+          style={{ background: `radial-gradient(circle, ${colors.secondary} 0%, transparent 70%)` }}
+        />
+      </div>
+
+      <header className="flex items-center justify-between px-2 py-2 md:p-6 bg-black/20 backdrop-blur-xl border-b border-white/5 sticky top-0 z-50">
         <div className="flex items-center gap-1 md:gap-3">
           <button onClick={onBack} className="p-1.5 md:p-3 hover:bg-white/10 rounded-lg md:rounded-2xl transition-colors bg-white/5">
             <ChevronLeft size={18} className="md:w-6 md:h-6" />

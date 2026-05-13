@@ -38,13 +38,25 @@ class SoundService {
     }
   }
 
-  private initCtx() {
+  public resume() {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().then(() => {
+        if (this.musicEnabled && this.musicNodes.length === 0) {
+          this.startMusic();
+        }
+      }).catch(e => {
+        // Silent catch for autoplay policy
+      });
+    } else if (this.musicEnabled && this.musicNodes.length === 0) {
+      this.startMusic();
     }
+  }
+
+  private initCtx() {
+    // This is no longer called automatically to avoid warnings
   }
 
   private stopMusic() {
@@ -56,19 +68,19 @@ class SoundService {
       try {
         if (node instanceof OscillatorNode) node.stop();
         node.disconnect();
-      } catch (e) {
-        // Already stopped/disconnected
-      }
+      } catch (e) {}
     });
     this.musicNodes = [];
   }
 
   private startMusic() {
     if (!this.musicEnabled || this.currentStyle === 'none') return;
-    this.initCtx();
-    if (!this.ctx) return;
+    
+    // Strictly wait for the context to be ready via a user gesture (resume method)
+    if (!this.ctx || this.ctx.state !== 'running') return;
 
     this.stopMusic(); // Ensure clean start
+    // ... rest of logic
 
     switch (this.currentStyle) {
       case 'calm':
@@ -225,40 +237,51 @@ class SoundService {
 
   playClick() {
     if (!this.enabled) return;
-    this.initCtx();
+    this.resume();
     this.beep(440, 0.05, 'triangle', 0.1);
   }
 
   playConnect() {
     if (!this.enabled) return;
-    this.initCtx();
+    this.resume();
     this.beep(880, 0.1, 'sine', 0.1);
   }
 
   playComplete() {
     if (!this.enabled) return;
-    this.initCtx();
+    this.resume();
     const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
     notes.forEach((f, i) => this.beep(f, 0.3, 'sine', 0.1, i * 0.1));
   }
 
   private beep(freq: number, duration: number, type: OscillatorType = 'sine', volume = 0.2, delay = 0) {
     if (!this.ctx) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
     
-    gain.gain.setValueAtTime(0, this.ctx.currentTime + delay);
-    gain.gain.linearRampToValueAtTime(volume, this.ctx.currentTime + delay + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
+    // If suspended, don't return, but we won't hear this specific beep until resumed.
+    // The resume() call triggered by user gesture will handle future sounds.
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
 
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
 
-    osc.start(this.ctx.currentTime + delay);
-    osc.stop(this.ctx.currentTime + delay + duration);
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
+      
+      gain.gain.setValueAtTime(0, this.ctx.currentTime + delay);
+      gain.gain.linearRampToValueAtTime(volume * (this.volume / 0.5), this.ctx.currentTime + delay + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(this.ctx.currentTime + delay);
+      osc.stop(this.ctx.currentTime + delay + duration);
+    } catch (e) {
+      // Silence context errors
+    }
   }
 }
 

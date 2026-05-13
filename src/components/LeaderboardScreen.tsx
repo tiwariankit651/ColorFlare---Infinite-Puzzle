@@ -32,14 +32,23 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ onBack }) 
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-[#0a0a0a] text-white flex flex-col z-[100]">
+    <div className="fixed inset-0 bg-[#064e3b] text-white flex flex-col z-[100] overflow-hidden">
+      {/* Background Blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div 
+          animate={{ y: [0, 100, 0], scale: [1, 1.2, 1] }}
+          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+          className="absolute top-0 left-0 w-full h-full bg-yellow-500 rounded-full opacity-5 blur-[150px]"
+        />
+      </div>
+
       {/* Header */}
-      <div className="p-6 flex items-center justify-between border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-md sticky top-0 z-10">
+      <div className="p-6 flex items-center justify-between border-b border-white/5 bg-black/20 backdrop-blur-xl sticky top-0 z-10">
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={onBack}
-          className="p-2 hover:bg-white/5 rounded-xl transition-colors"
+          className="p-2 hover:bg-white/10 rounded-xl transition-colors bg-white/5"
         >
           <ChevronLeft size={24} />
         </motion.button>

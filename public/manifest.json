@@ -1,23 +1,43 @@
 {
+  "id": "com.colorflow.zen.puzzle",
   "name": "ColorFlow: Zen Puzzle",
   "short_name": "ColorFlow",
   "description": "A relaxing color-based puzzle game to find your flow.",
-  "start_url": "/",
+  "start_url": "./",
+  "scope": ".",
   "display": "standalone",
-  "background_color": "#000000",
+  "background_color": "#064e3b",
   "theme_color": "#10b981",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/extension/res-export/ic_extension_black_48dp.png",
-      "sizes": "192x192",
+      "src": "icon.png",
+      "sizes": "512x512",
+      "purpose": "any maskable",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/home_screen.png",
+      "sizes": "800x1452",
       "type": "image/png",
-      "purpose": "any maskable"
+      "form_factor": "narrow",
+      "label": "Home Screen"
     },
     {
-      "src": "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/extension/res-export/ic_extension_black_48dp.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/screenshots/gameplay_action.png",
+      "sizes": "800x1452",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Gameplay"
+    },
+    {
+      "src": "/screenshots/level_selection.png",
+      "sizes": "800x1452",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Level Selection"
     }
   ]
 }

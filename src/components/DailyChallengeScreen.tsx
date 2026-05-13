@@ -64,10 +64,19 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({ onCo
   if (!level) return null;
 
   return (
-    <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col text-white">
-      <header className="flex items-center justify-between p-6 bg-yellow-500/10 border-b border-yellow-500/20">
-        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full transition-colors mr-4">
-          <ChevronLeft size={28} />
+    <div className="fixed inset-0 bg-[#064e3b] flex flex-col text-white overflow-hidden">
+      {/* Background Blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div 
+          animate={{ x: [0, 60, 0], y: [0, 40, 0] }}
+          transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+          className="absolute -top-1/4 -left-1/4 w-[70vw] h-[70vw] bg-yellow-500 rounded-full opacity-10 blur-[100px]"
+        />
+      </div>
+
+      <header className="flex items-center justify-between p-6 bg-yellow-500/10 backdrop-blur-xl border-b border-yellow-500/20 z-50">
+        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-xl transition-colors mr-4 bg-white/5">
+          <ChevronLeft size={24} />
         </button>
         <div className="flex flex-col items-center">
             <h2 className="text-xl font-black italic tracking-tighter text-yellow-500">DAILY CHALLENGE</h2>

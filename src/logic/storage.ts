@@ -43,7 +43,7 @@ const DEFAULT_DATA: StorageData = {
   longestWinStreak: 0,
   dailyChallengesCompleted: 0,
   hintsUsed: 0,
-  hintsRemaining: 3,
+  hintsRemaining: 0,
   achievements: [],
   dailyStreak: 0,
   levelStars: {},

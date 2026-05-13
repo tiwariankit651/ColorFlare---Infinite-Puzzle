@@ -21,15 +21,29 @@ export const LevelSelectScreen: React.FC<LevelSelectScreenProps> = ({
   const levels = Array.from({ length: totalLevelsToShow }, (_, i) => i + 1);
 
   return (
-    <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col text-white">
-      <header className="flex items-center p-6 border-b border-white/5 bg-black/40 backdrop-blur-md sticky top-0 z-50">
-        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full transition-colors mr-4">
-          <ChevronLeft size={28} />
+    <div className="fixed inset-0 bg-[#064e3b] flex flex-col text-white overflow-hidden">
+      {/* Background Blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div 
+          animate={{ x: [0, 50, 0], y: [0, -50, 0], scale: [1, 1.2, 1] }}
+          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+          className="absolute -top-1/4 -right-1/4 w-[80vw] h-[80vw] bg-[#10b981] rounded-full opacity-10 blur-[100px]"
+        />
+        <motion.div 
+          animate={{ x: [0, -50, 0], y: [0, 50, 0], scale: [1, 1.1, 1] }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute -bottom-1/4 -left-1/4 w-[80vw] h-[80vw] bg-[#065f46] rounded-full opacity-10 blur-[120px]"
+        />
+      </div>
+
+      <header className="flex items-center p-6 border-b border-white/5 bg-black/20 backdrop-blur-xl sticky top-0 z-50">
+        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-xl transition-colors mr-4 bg-white/5">
+          <ChevronLeft size={24} />
         </button>
-        <h2 className="text-2xl font-black italic tracking-tighter">LEVEL SELECT</h2>
+        <h2 className="text-xl font-black italic tracking-tighter">LEVEL SELECT</h2>
       </header>
 
-      <main className="flex-1 p-6 overflow-y-auto">
+      <main className="flex-1 p-6 overflow-y-auto z-10">
         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-4 max-w-2xl mx-auto">
           {levels.map((level) => {
             const isUnlocked = level <= currentLevel;
