@@ -2,5 +2,7 @@
   "name": "ColorFlow - Infinite Puzzle",
   "description": "An infinite color-matching puzzle game with procedurally generated levels and beautiful themes.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
