@@ -24,8 +24,8 @@ export interface Level {
   solutionPaths?: { r: number, c: number }[][];
 }
 
-export type ThemeName = 'forest' | 'ocean' | 'space' | 'candy' | 'desert' | 'arctic' | 'volcano' | 'garden' | 'city' | 'clouds';
-export type MusicStyle = 'calm' | 'upbeat' | 'lofi' | 'nature' | 'retro' | 'none';
+export type ThemeName = 'forest' | 'ocean' | 'space' | 'candy' | 'desert' | 'arctic' | 'volcano' | 'garden' | 'city' | 'clouds' | 'cyber' | 'zen';
+export type MusicStyle = 'calm' | 'upbeat' | 'lofi' | 'nature' | 'retro' | 'jazz' | 'ambient' | 'deep' | 'pulse' | 'ethereal' | 'none';
 export type AccentColor = 'green' | 'blue' | 'purple' | 'pink' | 'orange' | 'teal' | 'red' | 'amber';
 
 export interface GameState {

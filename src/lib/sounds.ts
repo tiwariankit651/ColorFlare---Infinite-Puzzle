@@ -9,6 +9,37 @@ class SoundService {
   
   private musicNodes: AudioNode[] = [];
   private loopTimeout: any = null;
+  private isDocumentVisible: boolean = typeof document !== 'undefined' ? !document.hidden : true;
+
+  constructor() {
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.handleVisibilityChange);
+      window.addEventListener('pagehide', this.handleVisibilityChange);
+      window.addEventListener('beforeunload', this.handleVisibilityChange);
+    }
+  }
+
+  private handleVisibilityChange = () => {
+    if (typeof document === 'undefined') return;
+    
+    const isHidden = document.hidden;
+    if (isHidden) {
+      this.isDocumentVisible = false;
+      this.stopMusic();
+      if (this.ctx && this.ctx.state === 'running') {
+        this.ctx.suspend().catch(() => {});
+      }
+    } else {
+      this.isDocumentVisible = true;
+      if (this.ctx) {
+        this.ctx.resume().then(() => {
+          if (this.musicEnabled) {
+            this.startMusic();
+          }
+        }).catch(() => {});
+      }
+    }
+  };
 
   setMusicEnabled(enabled: boolean) {
     this.musicEnabled = enabled;
@@ -21,11 +52,8 @@ class SoundService {
 
   setVolume(v: number) {
     this.volume = v;
-    // For simplicity, stop and restart or wait for next note
-    // In a more complex setup, we'd have a master gain node
-    if (this.musicEnabled) {
-      this.stopMusic();
-      this.startMusic();
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.1);
     }
   }
 
@@ -41,7 +69,12 @@ class SoundService {
   public resume() {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.masterGain = this.ctx.createGain();
+      this.musicGain = this.ctx.createGain();
+      this.masterGain.connect(this.ctx.destination);
+      this.musicGain.connect(this.masterGain);
     }
+    
     if (this.ctx.state === 'suspended') {
       this.ctx.resume().then(() => {
         if (this.musicEnabled && this.musicNodes.length === 0) {
@@ -53,11 +86,18 @@ class SoundService {
     } else if (this.musicEnabled && this.musicNodes.length === 0) {
       this.startMusic();
     }
+
+    if (this.masterGain) {
+      this.masterGain.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.1);
+    }
   }
 
   private initCtx() {
     // This is no longer called automatically to avoid warnings
   }
+
+  private masterGain: GainNode | null = null;
+  private musicGain: GainNode | null = null;
 
   private stopMusic() {
     if (this.loopTimeout) {
@@ -67,6 +107,7 @@ class SoundService {
     this.musicNodes.forEach(node => {
       try {
         if (node instanceof OscillatorNode) node.stop();
+        if (node instanceof AudioBufferSourceNode) node.stop();
         node.disconnect();
       } catch (e) {}
     });
@@ -74,13 +115,12 @@ class SoundService {
   }
 
   private startMusic() {
-    if (!this.musicEnabled || this.currentStyle === 'none') return;
+    if (!this.musicEnabled || this.currentStyle === 'none' || !this.isDocumentVisible) return;
     
     // Strictly wait for the context to be ready via a user gesture (resume method)
     if (!this.ctx || this.ctx.state !== 'running') return;
 
     this.stopMusic(); // Ensure clean start
-    // ... rest of logic
 
     switch (this.currentStyle) {
       case 'calm':
@@ -98,53 +138,200 @@ class SoundService {
       case 'retro':
         this.playSpace();
         break;
+      case 'jazz':
+        this.playJazz();
+        break;
+      case 'ambient':
+        this.playAmbient();
+        break;
+      case 'deep':
+        this.playDeep();
+        break;
+      case 'pulse':
+        this.playPulse();
+        break;
+      case 'ethereal':
+        this.playEthereal();
+        break;
     }
+  }
+
+  private playJazz() {
+    const notes = [174.61, 207.65, 233.08, 261.63, 311.13]; // F3 Blues Scale
+    const playNote = () => {
+      if (!this.ctx || !this.musicGain || this.currentStyle !== 'jazz' || !this.isDocumentVisible || !this.musicEnabled) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = notes[Math.floor(Math.random() * notes.length)];
+      gain.gain.setValueAtTime(0, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.04, this.ctx.currentTime + 0.2);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 1.2);
+      osc.connect(gain);
+      gain.connect(this.musicGain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 1.2);
+      this.musicNodes.push(osc, gain);
+      this.loopTimeout = setTimeout(playNote, 600 + Math.random() * 800);
+    };
+    playNote();
+  }
+
+  private playAmbient() {
+    const playWave = () => {
+      if (!this.ctx || !this.musicGain || this.currentStyle !== 'ambient' || !this.isDocumentVisible || !this.musicEnabled) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 80 + Math.random() * 40;
+      gain.gain.setValueAtTime(0, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.02, this.ctx.currentTime + 6);
+      gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 12);
+      osc.connect(gain);
+      gain.connect(this.musicGain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 12);
+      this.musicNodes.push(osc, gain);
+      this.loopTimeout = setTimeout(playWave, 8000);
+    };
+    playWave();
+  }
+
+  private playDeep() {
+    const playDrone = () => {
+      if (!this.ctx || !this.musicGain || this.currentStyle !== 'deep' || !this.isDocumentVisible || !this.musicEnabled) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.value = 40 + Math.random() * 2;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 150;
+      gain.gain.setValueAtTime(0, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.03, this.ctx.currentTime + 4);
+      gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 8);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.musicGain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 8);
+      this.musicNodes.push(osc, gain, filter);
+      this.loopTimeout = setTimeout(playDrone, 6000);
+    };
+    playDrone();
+  }
+
+  private playPulse() {
+    const playBeep = () => {
+      if (!this.ctx || !this.musicGain || this.currentStyle !== 'pulse' || !this.isDocumentVisible || !this.musicEnabled) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = 220;
+      gain.gain.setValueAtTime(0, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
+      osc.connect(gain);
+      gain.connect(this.musicGain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.2);
+      this.musicNodes.push(osc, gain);
+      this.loopTimeout = setTimeout(playBeep, 250);
+    };
+    playBeep();
+  }
+
+  private playEthereal() {
+    const notes = [440, 493.88, 554.37, 659.25, 739.99]; // A Major Pentatonic
+    const playNote = () => {
+      if (!this.ctx || !this.musicGain || this.currentStyle !== 'ethereal' || !this.isDocumentVisible || !this.musicEnabled) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const reverb = this.ctx.createConvolver(); // Mock reverb with delay actually
+      const delay = this.ctx.createDelay();
+      delay.delayTime.value = 0.8;
+      const feedback = this.ctx.createGain();
+      feedback.gain.value = 0.5;
+
+      osc.type = 'sine';
+      osc.frequency.value = notes[Math.floor(Math.random() * notes.length)];
+      gain.gain.setValueAtTime(0, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.05, this.ctx.currentTime + 1);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 10);
+      
+      osc.connect(gain);
+      gain.connect(this.musicGain);
+      gain.connect(delay);
+      delay.connect(feedback);
+      feedback.connect(delay);
+      delay.connect(this.musicGain);
+
+      osc.start();
+      osc.stop(this.ctx.currentTime + 10);
+      this.musicNodes.push(osc, gain, delay, feedback);
+      this.loopTimeout = setTimeout(playNote, 3000 + Math.random() * 3000);
+    };
+    playNote();
   }
 
   private playUpbeat() {
     const notes = [261.63, 329.63, 392.00, 523.25]; // C Major Chord
     const playNote = () => {
-      if (!this.ctx || this.currentStyle !== 'upbeat') return;
+      if (!this.ctx || !this.musicGain || this.currentStyle !== 'upbeat' || !this.isDocumentVisible || !this.musicEnabled) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = 'square';
+      osc.type = 'triangle';
       osc.frequency.value = notes[Math.floor(Math.random() * notes.length)];
       
       gain.gain.setValueAtTime(0, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.02 * (this.volume / 0.5), this.ctx.currentTime + 0.1);
+      gain.gain.linearRampToValueAtTime(0.02, this.ctx.currentTime + 0.1);
       gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
       
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.musicGain);
       osc.start();
       osc.stop(this.ctx.currentTime + 0.5);
       this.musicNodes.push(osc, gain);
       
-      this.loopTimeout = setTimeout(playNote, 250);
+      this.loopTimeout = setTimeout(playNote, 400); // Slightly slower for relaxed feel
     };
     playNote();
   }
 
   private playZen() {
-    const notes = [261.63, 293.66, 329.63, 392.00, 440.00]; // C4 Pentatonic
+    const notes = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25]; // C4 Pentatonic + C5
     const playNote = () => {
-      if (!this.ctx || this.currentStyle !== 'calm') return;
-      const osc = this.ctx.createOscillator();
+      if (!this.ctx || !this.musicGain || this.currentStyle !== 'calm' || !this.isDocumentVisible || !this.musicEnabled) return;
+      
+      const oscillator = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = notes[Math.floor(Math.random() * notes.length)] * 0.5;
+      const delay = this.ctx.createDelay();
+      const feedback = this.ctx.createGain();
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.value = notes[Math.floor(Math.random() * notes.length)];
       
       gain.gain.setValueAtTime(0, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.05 * (this.volume / 0.5), this.ctx.currentTime + 2);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 8);
+      gain.gain.linearRampToValueAtTime(0.08, this.ctx.currentTime + 2);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 10);
       
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 8);
-      this.musicNodes.push(osc, gain);
+      delay.delayTime.value = 0.5;
+      feedback.gain.value = 0.4;
       
-      this.loopTimeout = setTimeout(playNote, 3000 + Math.random() * 4000);
+      oscillator.connect(gain);
+      gain.connect(this.musicGain);
+      
+      // Delay effect for "soothing" feel
+      gain.connect(delay);
+      delay.connect(feedback);
+      feedback.connect(delay);
+      delay.connect(this.musicGain);
+
+      oscillator.start();
+      oscillator.stop(this.ctx.currentTime + 12);
+      
+      this.musicNodes.push(oscillator, gain, delay, feedback);
+      this.loopTimeout = setTimeout(playNote, 4000 + Math.random() * 4000);
     };
     playNote();
   }
@@ -152,7 +339,7 @@ class SoundService {
   private playLofi() {
     const notes = [130.81, 146.83, 164.81, 196.00, 220.00]; // C3 Pentatonic
     const playNote = () => {
-      if (!this.ctx || this.currentStyle !== 'lofi') return;
+      if (!this.ctx || !this.musicGain || this.currentStyle !== 'lofi' || !this.isDocumentVisible || !this.musicEnabled) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       const filter = this.ctx.createBiquadFilter();
@@ -163,12 +350,12 @@ class SoundService {
       filter.frequency.value = 800;
       
       gain.gain.setValueAtTime(0, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.04 * (this.volume / 0.5), this.ctx.currentTime + 0.5);
+      gain.gain.linearRampToValueAtTime(0.04, this.ctx.currentTime + 0.5);
       gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 4);
       
       osc.connect(filter);
       filter.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.musicGain);
       osc.start();
       osc.stop(this.ctx.currentTime + 4);
       this.musicNodes.push(osc, gain, filter);
@@ -180,18 +367,18 @@ class SoundService {
 
   private playSpace() {
     const playDrone = () => {
-      if (!this.ctx || this.currentStyle !== 'retro') return;
+      if (!this.ctx || !this.musicGain || this.currentStyle !== 'retro' || !this.isDocumentVisible || !this.musicEnabled) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.value = 55 + Math.random() * 2; // Low A drone
       
       gain.gain.setValueAtTime(0, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.03 * (this.volume / 0.5), this.ctx.currentTime + 5);
+      gain.gain.linearRampToValueAtTime(0.03, this.ctx.currentTime + 5);
       gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 15);
       
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.musicGain);
       osc.start();
       osc.stop(this.ctx.currentTime + 15);
       this.musicNodes.push(osc, gain);
@@ -203,7 +390,7 @@ class SoundService {
 
   private playNature() {
     const playRain = () => {
-      if (!this.ctx || !this.ctx.createBufferSource || this.currentStyle !== 'nature') return;
+      if (!this.ctx || !this.musicGain || !this.ctx.createBufferSource || this.currentStyle !== 'nature' || !this.isDocumentVisible || !this.musicEnabled) return;
       const bufferSize = 2 * this.ctx.sampleRate;
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
       const output = buffer.getChannelData(0);
@@ -220,11 +407,11 @@ class SoundService {
       filter.frequency.setTargetAtTime(1000, this.ctx.currentTime, 0.5);
       
       const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(0.01 * (this.volume / 0.5), this.ctx.currentTime);
+      gain.gain.setValueAtTime(0.01, this.ctx.currentTime);
       
       whiteNoise.connect(filter);
       filter.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.musicGain);
       whiteNoise.start();
       this.musicNodes.push(whiteNoise, filter, gain);
     };
@@ -247,6 +434,17 @@ class SoundService {
     this.beep(880, 0.1, 'sine', 0.1);
   }
 
+  playCombo(count: number) {
+    if (!this.enabled) return;
+    this.resume();
+    const baseFreq = 440;
+    const freq = baseFreq * Math.pow(1.05946, count); // Increase semitones
+    this.beep(freq, 0.15, 'sine', 0.1 + (count * 0.01));
+    if (count > 3) {
+      this.beep(freq * 1.5, 0.1, 'sine', 0.05, 0.05);
+    }
+  }
+
   playComplete() {
     if (!this.enabled) return;
     this.resume();
@@ -255,10 +453,8 @@ class SoundService {
   }
 
   private beep(freq: number, duration: number, type: OscillatorType = 'sine', volume = 0.2, delay = 0) {
-    if (!this.ctx) return;
+    if (!this.ctx || !this.masterGain || !this.isDocumentVisible) return;
     
-    // If suspended, don't return, but we won't hear this specific beep until resumed.
-    // The resume() call triggered by user gesture will handle future sounds.
     if (this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
@@ -271,11 +467,11 @@ class SoundService {
       osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
       
       gain.gain.setValueAtTime(0, this.ctx.currentTime + delay);
-      gain.gain.linearRampToValueAtTime(volume * (this.volume / 0.5), this.ctx.currentTime + delay + 0.01);
+      gain.gain.linearRampToValueAtTime(volume, this.ctx.currentTime + delay + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain);
 
       osc.start(this.ctx.currentTime + delay);
       osc.stop(this.ctx.currentTime + delay + duration);

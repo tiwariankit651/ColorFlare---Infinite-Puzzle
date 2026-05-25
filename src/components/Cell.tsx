@@ -66,8 +66,8 @@ export const CellComponent: React.FC<CellProps> = ({ cell, color, isActive, isHi
         isActive ? 'ring-2 ring-white z-10' : ''
       }`}
       style={{
-        backgroundColor: getBgColor(),
-        background: cell.isPath && color ? `${color}59` : undefined
+        background: cell.isPath && color ? `${color}59` : undefined,
+        backgroundColor: cell.isPath && color ? undefined : (getBgColor() || 'rgba(255, 255, 255, 0.05)')
       }}
     >
       {isHint && (

@@ -3,7 +3,7 @@ import { ThemeName, MusicStyle, AccentColor } from '../types';
 
 const STORAGE_KEY = 'colorflow_storage';
 
-interface StorageData {
+export interface StorageData {
   level: number;
   stars: number;
   bestLevel: number;
@@ -19,7 +19,13 @@ interface StorageData {
   hintsRemaining: number;
   achievements: string[];
   lastDailyVisit?: string;
+  lastDailyChallengeDate?: string;
   dailyStreak: number;
+  streakDays: number;
+  lastClaimedRewardDate?: string;
+  totalPathsCreated: number;
+  fastestLevelTimes: Record<number, number>;
+  themeUsage: Record<string, number>;
   levelStars: Record<number, number>;
   username: string;
   avatarEmoji: string;
@@ -28,6 +34,7 @@ interface StorageData {
   musicStyle: MusicStyle;
   accentColor: AccentColor;
   volume: number;
+  tournamentRank?: number;
 }
 
 const DEFAULT_DATA: StorageData = {
@@ -46,6 +53,10 @@ const DEFAULT_DATA: StorageData = {
   hintsRemaining: 0,
   achievements: [],
   dailyStreak: 0,
+  streakDays: 0,
+  totalPathsCreated: 0,
+  fastestLevelTimes: {},
+  themeUsage: {},
   levelStars: {},
   username: '',
   avatarEmoji: '😀',
@@ -59,16 +70,23 @@ export const GameStorage = {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return DEFAULT_DATA;
     try {
-      return { ...DEFAULT_DATA, ...JSON.parse(saved) };
-    } catch {
+      const parsed = JSON.parse(saved);
+      // Ensure we merge with defaults to handle new fields added in updates
+      return { ...DEFAULT_DATA, ...parsed };
+    } catch (e) {
+      console.error("Failed to load game data", e);
       return DEFAULT_DATA;
     }
   },
 
-  saveData(data: Partial<StorageData>) {
-    const current = this.getData();
-    const next = { ...current, ...data };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  saveData(data: StorageData) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      // Log to console for verification during development if needed
+      // console.log("Progress Saved:", data.level, "Stars:", data.stars);
+    } catch (e) {
+      console.error("Failed to save game data", e);
+    }
   },
 
   reset() {

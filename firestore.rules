@@ -1,66 +1,80 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default deny
+    // 1. Default Deny catch-all
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Common helpers
-    function isSignedIn() {
-      return request.auth != null;
-    }
-    
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    // 2. Helper Primitives
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // 3. Validation Blueprints
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid'])
+        && data.uid == request.auth.uid
+        && (!('username' in data) || (data.username is string && data.username.size() <= 50))
+        && (!('avatarEmoji' in data) || data.avatarEmoji is string)
+        && (!('lastActive' in data) || data.lastActive is timestamp);
     }
 
-    function incoming() {
-      return request.resource.data;
+    function isValidLeaderboard(data) {
+      return data.keys().hasAll(['username', 'userId', 'totalStars', 'currentLevel'])
+        && data.username is string && data.username.size() <= 50
+        && data.userId == request.auth.uid
+        && data.totalStars is number
+        && data.currentLevel is number
+        && (!('dailyChallenges' in data) || data.dailyChallenges is number)
+        && (!('avatarEmoji' in data) || data.avatarEmoji is string)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
-    function existing() {
-      return resource.data;
+    function isValidTournament(data) {
+      return data.keys().hasAll(['username', 'userId', 'score', 'time', 'moves', 'levelsCompleted'])
+        && data.username is string && data.username.size() <= 50
+        && data.userId == request.auth.uid
+        && data.score is number
+        && data.time is number
+        && data.moves is number
+        && data.levelsCompleted is number
+        && (!('avatarEmoji' in data) || data.avatarEmoji is string)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
-    // Validation for Profile
-    function isValidProfile(data) {
-      return data.keys().hasAll(['username', 'avatarEmoji', 'lastActive']) &&
-             data.keys().size() == 3 &&
-             data.username is string && data.username.size() >= 1 && data.username.size() <= 50 &&
-             data.avatarEmoji is string && data.avatarEmoji.size() >= 1 && data.avatarEmoji.size() <= 20 &&
-             data.lastActive is timestamp;
-    }
-
-    // Validation for LeaderboardEntry
-    function isValidLeaderboardEntry(data) {
-      return data.keys().hasAll(['userId', 'username', 'avatarEmoji', 'totalStars', 'currentLevel', 'updatedAt']) &&
-             data.keys().size() == 6 &&
-             data.userId == request.auth.uid &&
-             data.username is string && data.username.size() >= 1 && data.username.size() <= 50 &&
-             data.avatarEmoji is string && data.avatarEmoji.size() >= 1 && data.avatarEmoji.size() <= 20 &&
-             data.totalStars is int && data.totalStars >= 0 &&
-             data.currentLevel is int && data.currentLevel >= 1 &&
-             data.updatedAt == request.time;
-    }
-
-    // User profiles match block
+    // 4. Collection Rules
     match /users/{userId} {
       allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isOwner(userId) && isValidProfile(incoming());
-      allow update: if isOwner(userId) && 
-                      isValidProfile(incoming()) && 
-                      (incoming().diff(existing()).affectedKeys().hasOnly(['username', 'avatarEmoji', 'lastActive']));
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming());
+      allow delete: if false;
     }
 
-    // Leaderboard match block
-    match /leaderboard/{userId} {
-      allow read: if true; // Allow anyone to read single docs or list/query the collection
-      allow create: if isOwner(userId) && isValidLeaderboardEntry(incoming());
-      allow update: if isOwner(userId) && 
-                      isValidLeaderboardEntry(incoming()) && 
-                      (incoming().diff(existing()).affectedKeys().hasOnly(['totalStars', 'currentLevel', 'updatedAt', 'username', 'avatarEmoji']));
+    // Match any collection that starts with leaderboard (covers leaderboard, leaderboard_daily_*, leaderboard_weekly_*, leaderboard_tournament_*)
+    match /{collectionId}/{userId} {
+      allow list, get: if isSignedIn() && collectionId.matches('^leaderboard.*');
+      
+      allow create: if isOwner(userId) && isValidId(userId) 
+        && (
+          (collectionId.matches('^leaderboard_tournament.*') && isValidTournament(incoming())) ||
+          (!collectionId.matches('^leaderboard_tournament.*') && collectionId.matches('^leaderboard.*') && isValidLeaderboard(incoming()))
+        );
+        
+      allow update: if isOwner(userId) 
+        && (
+          (collectionId.matches('^leaderboard_tournament.*') && isValidTournament(incoming())) ||
+          (!collectionId.matches('^leaderboard_tournament.*') && collectionId.matches('^leaderboard.*') && isValidLeaderboard(incoming()))
+        );
+        
+      allow delete: if isOwner(userId) && collectionId.matches('^leaderboard.*');
+    }
+    
+    // Testing connection path
+    match /test/connection {
+      allow read: if true;
     }
   }
 }

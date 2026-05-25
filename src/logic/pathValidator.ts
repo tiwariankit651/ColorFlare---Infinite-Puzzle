@@ -12,9 +12,20 @@ export class PathValidator {
       }
     }
 
-    // All color paths must connect their dots
-    for (let i = 0; i < level.colorCount; i++) {
-        if (!this.isColorConnected(level, i)) return false;
+    // Find all unique colorIndices of DOTs present on the board
+    const uniqueColors = new Set<number>();
+    for (let r = 0; r < level.gridSize; r++) {
+      for (let c = 0; c < level.gridSize; c++) {
+        const cell = level.grid[r][c];
+        if (cell.type === CellType.DOT && cell.colorIndex !== undefined) {
+          uniqueColors.add(cell.colorIndex);
+        }
+      }
+    }
+
+    // All present color paths must connect their dots
+    for (const colorIndex of uniqueColors) {
+        if (!this.isColorConnected(level, colorIndex)) return false;
     }
 
     return true;

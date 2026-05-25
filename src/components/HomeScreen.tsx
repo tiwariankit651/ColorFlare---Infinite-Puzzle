@@ -16,9 +16,26 @@ interface HomeScreenProps {
   onSettings: () => void;
   onProfile: () => void;
   onLeaderboard: () => void;
+  onTournament: () => void;
+  onEditor: () => void;
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, streak, hints, theme, avatar, onPlay, onLevels, onDaily, onSettings, onProfile, onLeaderboard }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ 
+  level, 
+  stars, 
+  streak, 
+  hints, 
+  theme, 
+  avatar, 
+  onPlay, 
+  onLevels, 
+  onDaily, 
+  onSettings, 
+  onProfile, 
+  onLeaderboard,
+  onTournament,
+  onEditor
+}) => {
   const getThemeColors = (themeName: ThemeName) => {
     switch (themeName) {
       case 'forest': return { bg: 'bg-[#064e3b]', accent: '#10b981', secondary: '#065f46' };
@@ -31,6 +48,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, streak, hi
       case 'garden': return { bg: 'bg-[#14532d]', accent: '#22c55e', secondary: '#166534' };
       case 'city': return { bg: 'bg-[#0f172a]', accent: '#64748b', secondary: '#1e293b' };
       case 'clouds': return { bg: 'bg-[#1e3a8a]', accent: '#60a5fa', secondary: '#1e40af' };
+      case 'cyber': return { bg: 'bg-[#0a0a0a]', accent: '#f0abfc', secondary: '#701a75' };
+      case 'zen': return { bg: 'bg-[#1c1917]', accent: '#d6d3d1', secondary: '#44403c' };
       default: return { bg: 'bg-[#064e3b]', accent: '#10b981', secondary: '#065f46' };
     }
   };
@@ -118,6 +137,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, streak, hi
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
+        whileHover={{ y: -5, shadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)" }}
         transition={{ delay: 0.6 }}
         className="mt-12 flex flex-col items-center gap-5 z-10"
       >
@@ -169,27 +189,47 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ level, stars, streak, hi
           <span className="text-2xl font-black italic tracking-tight">PLAY NOW</span>
         </motion.button>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={onDaily}
-            className="bg-white/10 backdrop-blur-xl text-white py-4 rounded-[1.5rem] flex flex-col items-center justify-center gap-1 border border-white/10 transition-all hover:bg-white/20"
+            className="bg-white/10 backdrop-blur-xl text-white py-4 rounded-[1.5rem] flex flex-col items-center justify-center gap-0.5 border border-white/10 transition-all hover:bg-white/20"
           >
-            <span className="text-[10px] font-black tracking-widest opacity-50">DAILY</span>
-            <span className="text-sm font-black italic">CHALLENGE</span>
+            <span className="text-[8px] font-black tracking-widest opacity-50">DAILY</span>
+            <span className="text-xs font-black italic">CHALLENGE</span>
           </motion.button>
 
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={onLevels}
-            className="bg-white/10 backdrop-blur-xl text-white py-4 rounded-[1.5rem] flex flex-col items-center justify-center gap-1 border border-white/10 transition-all hover:bg-white/20"
+            className="bg-white/10 backdrop-blur-xl text-white py-4 rounded-[1.5rem] flex flex-col items-center justify-center gap-0.5 border border-white/10 transition-all hover:bg-white/20"
           >
-            <span className="text-[10px] font-black tracking-widest opacity-50">BEYOND</span>
-            <span className="text-sm font-black italic">LEVELS</span>
+            <span className="text-[8px] font-black tracking-widest opacity-50">BEYOND</span>
+            <span className="text-xs font-black italic">LEVELS</span>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onEditor}
+            className="bg-amber-500/10 backdrop-blur-xl text-amber-300 py-4 rounded-[1.5rem] flex flex-col items-center justify-center gap-0.5 border border-amber-500/20 transition-all hover:bg-amber-500/20"
+          >
+            <span className="text-[8px] font-black tracking-widest opacity-50 text-amber-400">DESIGNER</span>
+            <span className="text-xs font-black italic text-amber-300">CUSTOM</span>
           </motion.button>
         </div>
+
+        <motion.button
+           whileHover={{ scale: 1.02 }}
+           whileTap={{ scale: 0.98 }}
+           onClick={onTournament}
+           className="w-full h-12 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 rounded-2xl flex items-center justify-center gap-2 border border-yellow-500/20 mt-2 group"
+        >
+          <Trophy size={14} className="text-yellow-500 group-hover:animate-bounce" />
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500/80">Weekend Tournament Live!</span>
+        </motion.button>
       </div>
 
       <motion.div 

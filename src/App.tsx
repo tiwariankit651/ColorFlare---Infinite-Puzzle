@@ -14,19 +14,27 @@ import { SplashScreen } from './components/SplashScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { ProfileScreen } from './components/ProfileScreen';
 import { LeaderboardScreen } from './components/LeaderboardScreen';
+import { AchievementsScreen } from './components/AchievementsScreen';
+import { TournamentScreen } from './components/TournamentScreen';
+import { LevelEditorScreen } from './components/LevelEditorScreen';
+import DynamicBackground from './components/DynamicBackground';
 import { ThemeName, MusicStyle, AccentColor } from './types';
 import { sounds } from './lib/sounds';
-import { GameStorage } from './logic/storage';
+import { GameStorage, StorageData } from './logic/storage';
 import { LeaderboardService } from './services/leaderboardService';
+import { UserService } from './services/userService';
+import { auth } from './firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { AchievementService, Achievement } from './services/achievementService';
 import confetti from 'canvas-confetti';
+import { Star } from 'lucide-react';
 
-type Screen = 'splash' | 'home' | 'game' | 'settings' | 'levelSelect' | 'daily' | 'login' | 'profile' | 'leaderboard';
+type Screen = 'splash' | 'home' | 'game' | 'settings' | 'levelSelect' | 'daily' | 'login' | 'profile' | 'leaderboard' | 'achievements' | 'tournament' | 'editor';
 
 const themes: ThemeName[] = [
   'forest', 'ocean', 'space', 'candy', 'desert',
   'arctic', 'volcano', 'garden', 'city', 'clouds',
+  'cyber', 'zen'
 ];
 
 const ACCENT_COLORS_MAP: Record<AccentColor, string> = {
@@ -41,21 +49,78 @@ const ACCENT_COLORS_MAP: Record<AccentColor, string> = {
 };
 
 export default function App() {
-  const [data, setData] = useState(() => GameStorage.getData());
+  const [data, setData] = useState<StorageData>(() => GameStorage.getData());
   const [screen, setScreen] = useState<Screen>('splash');
 
-  const handleSplashComplete = () => {
-    const saved = GameStorage.getData();
-    setScreen(saved.username ? 'home' : 'login');
+  // Helper to update state and save to transitively
+  const updateData = (updater: (prev: StorageData) => StorageData) => {
+    setData(prev => {
+      const next = updater(prev);
+      // Synchronous local save
+      GameStorage.saveData(next);
+      return next;
+    });
   };
 
-  const [soundOn, setSoundOn] = useState(data.soundOn);
-  const [musicOn, setMusicOn] = useState(data.musicOn);
-  const [musicStyle, setMusicStyle] = useState<MusicStyle>(data.musicStyle || 'calm');
-  const [accentColor, setAccentColor] = useState<AccentColor>(data.accentColor || 'green');
-  const [volume, setVolume] = useState(data.volume || 0.5);
+  // Unified Leaderboard and Cloud Sync Effect
+  useEffect(() => {
+    if (!auth.currentUser || !data.username) return;
+
+    const performSync = async () => {
+      // 1. Sync stars/level/daily to leaderboard
+      try {
+        await LeaderboardService.submitScore(
+          data.username,
+          data.avatarEmoji,
+          data.stars,
+          data.level,
+          data.dailyChallengesCompleted || 0
+        );
+      } catch (e) {
+        console.error("Leaderboard auto-sync failed:", e);
+      }
+
+      // 2. Sync full progress to cloud
+      try {
+        await UserService.saveProgress(data);
+      } catch (e) {
+        console.error("Cloud auto-sync failed:", e);
+      }
+    };
+
+    // Use a small delay to avoid excessive writes during rapid state changes
+    const timeout = setTimeout(performSync, 500);
+    return () => clearTimeout(timeout);
+  }, [data.level, data.stars, data.username, data.dailyChallengesCompleted, data.dailyStreak, data.avatarEmoji]);
+
+  useEffect(() => {
+    // Initial cloud load after auth is ready
+    const syncWithCloud = async () => {
+      if (auth.currentUser) {
+        const cloudData = await UserService.loadProgress();
+        if (cloudData) {
+          setData(prev => ({ ...prev, ...cloudData }));
+        }
+      }
+    };
+    
+    syncWithCloud();
+  }, []);
+
+  const handleSplashComplete = () => {
+    setScreen(data.username ? 'home' : 'login');
+  };
+
+  // Derivative settings to keep UI simple
+  const soundOn = data.soundOn;
+  const musicOn = data.musicOn;
+  const musicStyle = data.musicStyle || 'calm';
+  const accentColor = data.accentColor || 'green';
+  const volume = data.volume ?? 0.5;
+
   const [gameLevel, setGameLevel] = useState<number | null>(null);
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
+  const [dailyReward, setDailyReward] = useState<{ stars: number, hints: number } | null>(null);
   
   const [hasSeenTutorial, setHasSeenTutorial] = useState(() => {
     return localStorage.getItem('colorflow_tutorial') === 'true';
@@ -72,62 +137,59 @@ export default function App() {
     const today = new Date().toDateString();
     
     if (lastVisit !== today) {
-      // Don't give bonus if it's the very first visit to keep stars at 0 for new players
-      const isFirstVisitEver = !lastVisit;
-      
-      let nextStreak = data.dailyStreak || 0;
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      
-      if (lastVisit === yesterday.toDateString()) {
-        nextStreak += 1;
-      } else {
-        nextStreak = 1;
-      }
+      updateData(prev => {
+        const isFirstVisitEver = !lastVisit;
+        let nextStreak = prev.dailyStreak || 0;
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        if (lastVisit === yesterday.toDateString()) {
+          nextStreak += 1;
+        } else {
+          nextStreak = 1;
+        }
 
-      // Rewards for streak - Only give bonus if streak is continuing or if it's not the first visit ever
-      let bonusStars = 0;
-      let bonusHints = 0;
+        let bonusStars = 0;
+        let bonusHints = 0;
 
-      if (!isFirstVisitEver) {
-        bonusStars = 2; // Baseline for returning
-        if (nextStreak % 5 === 0) bonusHints = 1;
-        if (nextStreak % 10 === 0) bonusStars += 10;
-      }
+        if (!isFirstVisitEver) {
+          bonusStars = 10 + (nextStreak * 2);
+          if (nextStreak % 5 === 0) bonusHints = 1;
+          setDailyReward({ stars: bonusStars, hints: bonusHints });
+        }
 
-      setData(prev => ({
-        ...prev,
-        dailyStreak: nextStreak,
-        lastDailyVisit: today,
-        stars: isFirstVisitEver ? 0 : prev.stars + bonusStars,
-        hintsRemaining: isFirstVisitEver ? 0 : (prev.hintsRemaining || 0) + bonusHints
-      }));
-      
-      if (bonusHints > 0 && !isFirstVisitEver) {
-        console.log(`Streak Reward! ${bonusHints} hints added.`);
-      }
+        const nextData = {
+          ...prev,
+          dailyStreak: nextStreak,
+          streakDays: (prev.streakDays || 0) + 1,
+          lastDailyVisit: today,
+          stars: prev.stars + bonusStars,
+          hintsRemaining: (prev.hintsRemaining || 0) + bonusHints
+        };
+
+        return nextData;
+      });
     }
-  }, []);
+  }, [data.username]); // Added data.username to deps to ensure sync after login
 
   useEffect(() => {
     // Check for achievements
     const earned = AchievementService.getNewAchievements(data);
     if (earned.length > 0) {
       setNewAchievements(prev => [...prev, ...earned]);
-      setData(prev => ({
+      updateData(prev => ({
         ...prev,
         achievements: [...(prev.achievements || []), ...earned.map(a => a.id)],
         stars: prev.stars + earned.reduce((sum, a) => sum + a.rewardStars, 0)
       }));
       
-      // Fire confetti for big achievements
       confetti({
         particleCount: 150,
         spread: 70,
         origin: { y: 0.6 }
       });
     }
-  }, [data]);
+  }, [data.level, data.stars, data.totalGamesPlayed, data.tournamentRank]); // Only trigger on key stats
 
   useEffect(() => {
     // Apply accent color to CSS variable
@@ -135,16 +197,19 @@ export default function App() {
   }, [accentColor]);
 
   useEffect(() => {
-    GameStorage.saveData(data);
+    // Sync sounds system with settings
     sounds.setEnabled(soundOn);
     sounds.setMusicEnabled(musicOn);
-    sounds.setMusicStyle(musicStyle);
+    
+    // Vibe-based logic (can be overridden by manual settings in the future)
+    if (screen === 'game' || screen === 'daily') {
+      sounds.setMusicStyle('calm');
+    } else {
+      sounds.setMusicStyle('upbeat');
+    }
+    
     sounds.setVolume(volume);
-  }, [data, soundOn, musicOn, musicStyle, volume]);
-
-  useEffect(() => {
-    setData(prev => ({ ...prev, soundOn, musicOn, musicStyle, accentColor, volume }));
-  }, [soundOn, musicOn, musicStyle, accentColor, volume]);
+  }, [soundOn, musicOn, musicStyle, volume, screen]);
 
   const currentTheme = data.theme || themes[Math.floor((data.level - 1) / 10) % themes.length];
 
@@ -159,20 +224,8 @@ export default function App() {
 
   const handleLevelComplete = ({ stars: starsEarned, moves, time }: { stars: number, moves: number, time: number }) => {
     const activeLvl = gameLevel || data.level;
+    const isPlayingCurrent = gameLevel === null || gameLevel === data.level;
     
-    // Calculate new values outside to avoid side effects in state updater
-    const oldLevelStars = data.levelStars || {};
-    const oldStarsForLevel = oldLevelStars[activeLvl] || 0;
-    const starDifference = Math.max(0, starsEarned - oldStarsForLevel);
-    const nextStars = data.stars + starDifference;
-    
-    let nextLevel = data.level;
-    let nextBestLevel = data.bestLevel;
-    if (gameLevel === null || gameLevel === data.level) {
-      nextLevel = data.level + 1;
-      if (nextLevel > nextBestLevel) nextBestLevel = nextLevel;
-    }
-
     if (starsEarned === 3) {
       confetti({
         particleCount: 100,
@@ -182,43 +235,73 @@ export default function App() {
       });
     }
 
-    const nextData = { 
-      ...data, 
-      stars: nextStars, 
-      levelStars: { ...oldLevelStars, [activeLvl]: Math.max(oldStarsForLevel, starsEarned) },
-      level: nextLevel, 
-      bestLevel: nextBestLevel,
-      totalGamesPlayed: (data.totalGamesPlayed || 0) + 1,
-      totalMoves: (data.totalMoves || 0) + moves,
-      totalTimeSeconds: (data.totalTimeSeconds || 0) + time,
-      threeStarLevels: (data.threeStarLevels || 0) + (starsEarned === 3 ? 1 : 0)
-    };
+    updateData(prev => {
+      const oldLevelStars = prev.levelStars || {};
+      const oldStarsForLevel = oldLevelStars[activeLvl] || 0;
+      const starDifference = Math.max(0, starsEarned - oldStarsForLevel);
+      const nextStars = prev.stars + starDifference;
+      
+      let nextLevel = prev.level;
+      let nextBestLevel = prev.bestLevel;
+      
+      if (isPlayingCurrent) {
+        nextLevel = prev.level + 1;
+        if (nextLevel > nextBestLevel) nextBestLevel = nextLevel;
+      }
 
-    setData(nextData);
+      const currentThemeName = currentTheme;
+      const themeUsage = { ...prev.themeUsage };
+      themeUsage[currentThemeName] = (themeUsage[currentThemeName] || 0) + 1;
+
+      const fastestTimes = { ...prev.fastestLevelTimes };
+      const previousBestTime = fastestTimes[activeLvl];
+      if (!previousBestTime || time < previousBestTime) {
+        fastestTimes[activeLvl] = time;
+      }
+
+      const nextData = { 
+        ...prev, 
+        stars: nextStars, 
+        levelStars: { ...oldLevelStars, [activeLvl]: Math.max(oldStarsForLevel, starsEarned) },
+        level: nextLevel, 
+        bestLevel: nextBestLevel,
+        totalGamesPlayed: (prev.totalGamesPlayed || 0) + 1,
+        totalMoves: (prev.totalMoves || 0) + moves,
+        totalTimeSeconds: (prev.totalTimeSeconds || 0) + time,
+        threeStarLevels: (prev.threeStarLevels || 0) + (starsEarned === 3 ? 1 : 0),
+        fastestLevelTimes: fastestTimes,
+        themeUsage: themeUsage,
+        totalPathsCreated: (prev.totalPathsCreated || 0) + 1 // Assuming 1 completion = at least 1 path session
+      };
+
+      return nextData;
+    });
     
-    // Side effect: Sync with global leaderboard if username exists
-    if (nextData.username) {
-      LeaderboardService.submitScore(
-        nextData.username,
-        nextData.avatarEmoji,
-        nextStars,
-        nextLevel
-      ).catch(e => console.error("Leaderboard sync failed", e));
-    }
-    
-    if (gameLevel === data.level || gameLevel === null) {
-      setGameLevel(null);
+    // If we were playing an older level, go back to level select after "Next" is clicked
+    if (!isPlayingCurrent) {
+        setScreen('levelSelect');
+        setGameLevel(null);
+    } else {
+        setGameLevel(null);
     }
   };
 
-  const handleLogin = (username: string, avatarEmoji: string) => {
-    const nextData = { ...data, username, avatarEmoji };
-    setData(nextData);
-    GameStorage.saveData(nextData);
+  const handleLogin = async (username: string, avatarEmoji: string) => {
+    // Check for cloud data first
+    const cloudData = await UserService.loadProgress();
+    
+    updateData(prev => ({ 
+      ...prev, 
+      ...(cloudData || {}),
+      username: cloudData?.username || username, 
+      avatarEmoji: cloudData?.avatarEmoji || avatarEmoji 
+    }));
+    
     setScreen('home');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await auth.signOut();
     GameStorage.reset();
     setData(GameStorage.getData());
     setScreen('login');
@@ -235,6 +318,8 @@ export default function App() {
       onClick={() => sounds.resume()}
       onTouchStart={() => sounds.resume()}
     >
+      <DynamicBackground theme={currentTheme} />
+      
       <AnimatePresence mode="wait">
         {screen === 'splash' && (
           <motion.div
@@ -269,7 +354,34 @@ export default function App() {
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             className="absolute inset-0"
           >
-            <ProfileScreen data={data} onBack={() => setScreen('home')} onLogout={handleLogout} />
+            <ProfileScreen 
+              data={data} 
+              onBack={() => setScreen('home')} 
+              onLogout={handleLogout} 
+              onRefreshData={async () => {
+                const cloudData = await UserService.loadProgress();
+                if (cloudData) {
+                  setData(prev => ({ ...prev, ...cloudData }));
+                }
+              }}
+              onOpenAchievements={() => setScreen('achievements')}
+            />
+          </motion.div>
+        )}
+
+        {screen === 'achievements' && (
+          <motion.div
+            key="achievements"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="absolute inset-0"
+          >
+            <AchievementsScreen 
+              unlockedIds={data.achievements || []}
+              onBack={() => setScreen('profile')}
+            />
           </motion.div>
         )}
 
@@ -307,6 +419,8 @@ export default function App() {
               onSettings={() => { playClick(); setScreen('settings'); }} 
               onProfile={() => { playClick(); setScreen('profile'); }}
               onLeaderboard={() => { playClick(); setScreen('leaderboard'); }}
+              onTournament={() => { playClick(); setScreen('tournament'); }}
+              onEditor={() => { playClick(); setScreen('editor'); }}
             />
           </motion.div>
         )}
@@ -340,6 +454,15 @@ export default function App() {
             className="absolute inset-0"
           >
             <DailyChallengeScreen 
+              challengesCompleted={data.dailyChallengesCompleted || 0}
+              lastCompletionDate={data.lastDailyChallengeDate}
+              hintsRemaining={data.hintsRemaining || 0}
+              onHintUsed={() => {
+                updateData(prev => ({
+                  ...prev,
+                  hintsRemaining: Math.max(0, (prev.hintsRemaining || 0) - 1)
+                }));
+              }}
               onComplete={(stats) => {
                 sounds.playComplete();
                 confetti({
@@ -348,28 +471,15 @@ export default function App() {
                   origin: { y: 0.6 }
                 });
 
-                const nextStars = data.stars + stats.stars;
-                const nextDailyCount = (data.dailyChallengesCompleted || 0) + 1;
-                const nextData = { 
-                  ...data, 
-                  stars: nextStars,
-                  dailyChallengesCompleted: nextDailyCount,
-                  totalMoves: (data.totalMoves || 0) + stats.moves,
-                  totalTimeSeconds: (data.totalTimeSeconds || 0) + stats.time
-                };
-
-                setData(nextData);
-
-                // Sync with leaderboard
-                if (nextData.username) {
-                  LeaderboardService.submitScore(
-                    nextData.username,
-                    nextData.avatarEmoji,
-                    nextData.stars,
-                    nextData.level
-                  ).catch(e => console.error("Leaderboard sync failed", e));
-                }
-                setScreen('home');
+                updateData(prev => ({
+                  ...prev, 
+                  stars: prev.stars + stats.stars,
+                  hintsRemaining: (prev.hintsRemaining || 0) + 1,
+                  dailyChallengesCompleted: (prev.dailyChallengesCompleted || 0) + 1,
+                  lastDailyChallengeDate: new Date().toDateString(),
+                  totalMoves: (prev.totalMoves || 0) + stats.moves,
+                  totalTimeSeconds: (prev.totalTimeSeconds || 0) + stats.time
+                }));
               }}
               onBack={() => { playClick(); setScreen('home'); }}
               palette={data.palette}
@@ -393,7 +503,7 @@ export default function App() {
                 setScreen('home'); 
               }} 
               onHintUsed={() => {
-                setData(prev => ({ 
+                updateData(prev => ({ 
                   ...prev, 
                   hintsUsed: (prev.hintsUsed || 0) + 1,
                   hintsRemaining: Math.max(0, (prev.hintsRemaining || 0) - 1)
@@ -418,44 +528,139 @@ export default function App() {
               onBack={() => { playClick(); setScreen('home'); }} 
               soundOn={soundOn}
               musicOn={musicOn}
-              onToggleSound={() => setSoundOn(!soundOn)}
-              onToggleMusic={() => setMusicOn(!musicOn)}
+              onToggleSound={() => updateData(prev => ({ ...prev, soundOn: !prev.soundOn }))}
+              onToggleMusic={() => updateData(prev => ({ ...prev, musicOn: !prev.musicOn }))}
               onResetProgress={handleLogout}
               preferredTheme={data.theme}
-              onSelectTheme={(t) => { setData(prev => ({ ...prev, theme: t })); sounds.playClick(); }}
+              onSelectTheme={(t) => { updateData(prev => ({ ...prev, theme: t })); sounds.playClick(); }}
               preferredPalette={data.palette}
-              onSelectPalette={(p) => { setData(prev => ({ ...prev, palette: p })); sounds.playClick(); }}
+              onSelectPalette={(p) => { updateData(prev => ({ ...prev, palette: p })); sounds.playClick(); }}
               musicStyle={musicStyle}
-              onSelectMusicStyle={(s) => { setMusicStyle(s); sounds.playClick(); }}
+              onSelectMusicStyle={(s) => { updateData(prev => ({ ...prev, musicStyle: s })); sounds.playClick(); }}
               accentColor={accentColor}
-              onSelectAccentColor={(c) => { setAccentColor(c); sounds.playClick(); }}
+              onSelectAccentColor={(c) => { updateData(prev => ({ ...prev, accentColor: c })); sounds.playClick(); }}
               volume={volume}
-              onVolumeChange={(v) => { setVolume(v); }}
+              onVolumeChange={(v) => { updateData(prev => ({ ...prev, volume: v })); }}
+            />
+          </motion.div>
+        )}
+        {screen === 'tournament' && (
+          <motion.div
+            key="tournament"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="absolute inset-0"
+          >
+            <TournamentScreen 
+              onBack={() => { playClick(); setScreen('home'); }}
+              userStars={data.stars}
+              username={data.username || ''}
+              avatarEmoji={data.avatarEmoji || '🎮'}
+              onUpdateStars={(amount) => {
+                updateData(prev => ({
+                  ...prev,
+                  stars: prev.stars + amount
+                }));
+              }}
+              onUpdateRank={(rank) => {
+                updateData(prev => {
+                  if (prev.tournamentRank === rank) return prev;
+                  return {
+                    ...prev,
+                    tournamentRank: rank
+                  };
+                });
+              }}
+            />
+          </motion.div>
+        )}
+        {screen === 'editor' && (
+          <motion.div
+            key="editor"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="absolute inset-0"
+          >
+            <LevelEditorScreen 
+              onBack={() => { playClick(); setScreen('home'); }}
+              username={data.username || ''}
             />
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Daily Reward Modal */}
+      <AnimatePresence>
+        {dailyReward && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              onClick={() => setDailyReward(null)}
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-3xl p-8 text-center shadow-2xl"
+            >
+              <div className="w-24 h-24 bg-yellow-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-yellow-500/20">
+                <Star size={48} className="text-black fill-black" />
+              </div>
+              <h3 className="text-3xl font-black italic text-white mb-2 uppercase tracking-tight">Daily Reward!</h3>
+              <p className="text-white/60 mb-8 font-medium">You logged in for <span className="text-yellow-500 font-bold">{data.dailyStreak}</span> days in a row!</p>
+              
+              <div className="flex justify-center gap-6 mb-8">
+                <div className="flex flex-col items-center">
+                   <div className="text-2xl font-black text-yellow-500">+{dailyReward.stars}</div>
+                   <div className="text-[10px] uppercase font-black tracking-widest text-white/40">Stars</div>
+                </div>
+                {dailyReward.hints > 0 && (
+                  <div className="flex flex-col items-center">
+                     <div className="text-2xl font-black text-cyan-400">+{dailyReward.hints}</div>
+                     <div className="text-[10px] uppercase font-black tracking-widest text-white/40">Hints</div>
+                  </div>
+                )}
+              </div>
 
-      {/* Achievement Notifications */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="w-full py-4 bg-white text-black font-black italic rounded-2xl shadow-lg hover:bg-yellow-400 transition-colors"
+                onClick={() => setDailyReward(null)}
+              >
+                AWESOME!
+              </motion.button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Achievement Notification Toast */}
       <AnimatePresence>
         {newAchievements.length > 0 && (
-          <motion.div 
+          <motion.div
             key={newAchievements[0].id}
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-white/10 backdrop-blur-xl border border-white/20 p-4 rounded-3xl flex items-center gap-4 shadow-2xl"
+            initial={{ opacity: 0, y: -100, x: '-50%' }}
+            animate={{ opacity: 1, y: 20, x: '-50%' }}
+            exit={{ opacity: 0, y: -100, x: '-50%' }}
+            className="fixed top-0 left-1/2 z-[100] w-[90%] max-w-sm bg-black/80 backdrop-blur-xl border border-amber-400/30 rounded-2xl p-4 shadow-2xl flex items-center gap-4"
           >
-            <div className="w-12 h-12 bg-yellow-500 rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-yellow-500/20">
+            <div className="w-12 h-12 flex items-center justify-center bg-amber-400/20 rounded-xl text-2xl shadow-inner border border-amber-400/20">
               {newAchievements[0].icon}
             </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] font-black uppercase tracking-widest text-yellow-500">Achievement Unlocked!</span>
-              <span className="text-sm font-black text-white">{newAchievements[0].title}</span>
-              <span className="text-[10px] text-white/50">{newAchievements[0].description}</span>
+            <div className="flex-1">
+               <p className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-400 mb-1">Achievement Unlocked!</p>
+               <h4 className="text-white font-black italic tracking-tight">{newAchievements[0].title}</h4>
+               <p className="text-xs text-white/60 font-medium">{newAchievements[0].description}</p>
             </div>
-            <div className="bg-white/5 px-3 py-1 rounded-xl border border-white/10 ml-2">
-               <span className="text-xs font-black text-yellow-500">+{newAchievements[0].rewardStars} ⭐</span>
+            <div className="bg-amber-400/10 px-2 py-1 rounded-lg border border-amber-400/20 flex items-center gap-1">
+               <Star size={10} className="text-amber-400 fill-amber-400" />
+               <span className="text-[10px] font-black text-amber-400">+{newAchievements[0].rewardStars}</span>
             </div>
           </motion.div>
         )}

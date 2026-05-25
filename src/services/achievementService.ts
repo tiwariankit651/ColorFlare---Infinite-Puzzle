@@ -56,6 +56,54 @@ export const ACHIEVEMENTS: Achievement[] = [
     icon: '📅',
     condition: (data) => data.dailyChallengesCompleted >= 3,
     rewardStars: 25
+  },
+  {
+    id: 'moves_1000',
+    title: 'Flow Artist',
+    description: 'Make 1,000 total moves',
+    icon: '🎨',
+    condition: (data) => data.totalMoves >= 1000,
+    rewardStars: 50
+  },
+  {
+    id: 'stars_500',
+    title: 'Megastar',
+    description: 'Collect 500 stars',
+    icon: '✨',
+    condition: (data) => data.stars >= 500,
+    rewardStars: 100
+  },
+  {
+    id: 'perfect_10',
+    title: 'Perfectionist',
+    description: 'Get 3 stars on 10 different levels',
+    icon: '💎',
+    condition: (data) => data.threeStarLevels >= 10,
+    rewardStars: 30
+  },
+  {
+    id: 'tournament_top3',
+    title: 'Eclipse Legend 👑',
+    description: 'Finish in the Top 3 of the Weekend Arena tournament!',
+    icon: '🏆',
+    condition: (data) => data.tournamentRank !== undefined && data.tournamentRank > 0 && data.tournamentRank <= 3,
+    rewardStars: 100
+  },
+  {
+    id: 'tournament_top10',
+    title: 'Elite Challenger 💎',
+    description: 'Finish in the Top 10 of the Weekend Arena tournament!',
+    icon: '🏅',
+    condition: (data) => data.tournamentRank !== undefined && data.tournamentRank > 0 && data.tournamentRank <= 10,
+    rewardStars: 50
+  },
+  {
+    id: 'tournament_top100',
+    title: 'Arena Contender ✨',
+    description: 'Finish in the Top 100 of the Weekend Arena tournament!',
+    icon: '⭐',
+    condition: (data) => data.tournamentRank !== undefined && data.tournamentRank > 0 && data.tournamentRank <= 100,
+    rewardStars: 20
   }
 ];
 

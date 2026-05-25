@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Lightbulb, RefreshCw, ChevronLeft, HelpCircle, Undo2, FastForward, Star, PlayCircle } from 'lucide-react';
+import { Lightbulb, RefreshCw, ChevronLeft, HelpCircle, Undo2, FastForward, Star, PlayCircle, Share2 } from 'lucide-react';
 import { Level, ThemeName } from '../types';
 import { LevelGenerator } from '../logic/levelGenerator';
 import { GameBoard } from './GameBoard';
@@ -36,7 +36,7 @@ const GOOD_MSGS = ['🎉 Hurray!', '🏆 Congrats!', '😎 Cool!', '🥳 Happy!'
 
 export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete, onBack, onHintUsed, palette, theme, hintsRemaining = 0 }) => {
   const gameColors = palette || DEFAULT_COLORS;
-  const generator = useMemo(() => new LevelGenerator(), []);
+  const [level, setLevel] = useState<Level | null>(null);
 
   const getThemeColors = (themeName?: ThemeName) => {
     switch (themeName) {
@@ -50,11 +50,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
       case 'garden': return { bg: 'bg-[#14532d]', accent: '#22c55e', secondary: '#166534' };
       case 'city': return { bg: 'bg-[#0f172a]', accent: '#64748b', secondary: '#1e293b' };
       case 'clouds': return { bg: 'bg-[#1e3a8a]', accent: '#60a5fa', secondary: '#1e40af' };
+      case 'cyber': return { bg: 'bg-[#0a0a0a]', accent: '#f0abfc', secondary: '#701a75' };
+      case 'zen': return { bg: 'bg-[#1c1917]', accent: '#d6d3d1', secondary: '#44403c' };
       default: return { bg: 'bg-[#0a0a0a]', accent: '#10b981', secondary: '#1f2937' };
     }
   };
 
-  const [level, setLevel] = useState<Level | null>(null);
   const [grid, setGrid] = useState<any[][] | null>(null);
   const [history, setHistory] = useState<any[][][]>([]);
   const [winningHistory, setWinningHistory] = useState<any[][][]>([]);
@@ -90,7 +91,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
   const [adTimeElapsed, setAdTimeElapsed] = useState(0);
 
   useEffect(() => {
-    const newLevel = generator.generate(currentLevel);
+    // Generate a stable seed for this level to ensure consistency across users and sessions
+    const levelSeed = (currentLevel * 15485863) % 2147483647;
+    const levelGenerator = new LevelGenerator(levelSeed);
+    const newLevel = levelGenerator.generate(currentLevel);
+    
     setLevel(newLevel);
     setGrid(newLevel.grid);
     setHistory([]);
@@ -105,7 +110,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     return () => {
       if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
     };
-  }, [currentLevel, generator]);
+  }, [currentLevel]);
 
   useEffect(() => {
     if (cooldownRemaining > 0) {
@@ -282,8 +287,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     const capturedGrid = grid.map(row => row.map(cell => ({ ...cell })));
     setPreHintGrid(capturedGrid);
     
-    // Create solution grid
-    const solutionGrid = grid.map(row => row.map(cell => ({ ...cell })));
+    // Create solution grid - CLEAN VERSION: Start with dots and walls only to avoid mess
+    const solutionGrid = level.grid.map(row => row.map(cell => ({ 
+        ...cell, 
+        isPath: false, 
+        pathColorIndex: undefined 
+    })));
+    
     level.solutionPaths.forEach((path, colorIdx) => {
         path.forEach(p => {
             const cell = solutionGrid[p.r][p.c];
@@ -317,12 +327,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     }, displayDuration);
   };
 
-  const isHintUnlocked = moveCount >= 5; // Reduced from 40 for better accessibility
+  const isHintUnlocked = moveCount >= 5; 
   const isCooldownOver = cooldownRemaining === 0;
-  const canUseHint = isCooldownOver && !showingSolution;
+  const canUseHint = isCooldownOver && !showingSolution && !showComplete && !isReviewing;
 
   if (!level) return null;
   const colors = getThemeColors(theme);
+
+  const controlsDisabled = showComplete || isReviewing;
 
   return (
     <div className={`fixed inset-0 ${colors.bg} flex flex-col text-white pt-secure overflow-hidden`}>
@@ -352,31 +364,54 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
 
       <header className="flex items-center justify-between px-2 py-2 md:p-6 bg-black/20 backdrop-blur-xl border-b border-white/5 sticky top-0 z-50">
         <div className="flex items-center gap-1 md:gap-3">
-          <button onClick={onBack} className="p-1.5 md:p-3 hover:bg-white/10 rounded-lg md:rounded-2xl transition-colors bg-white/5">
+          <button 
+            onClick={onBack} 
+            disabled={controlsDisabled}
+            className={`p-1.5 md:p-3 hover:bg-white/10 rounded-lg md:rounded-2xl transition-colors bg-white/5 ${controlsDisabled ? 'opacity-20 pointer-events-none' : ''}`}
+          >
             <ChevronLeft size={18} className="md:w-6 md:h-6" />
           </button>
           <button 
             onClick={resetLevel} 
-            className="p-1.5 md:p-3 hover:bg-white/10 rounded-lg md:rounded-2xl transition-colors bg-white/5 text-white/50 hover:text-white"
+            disabled={controlsDisabled}
+            className={`p-1.5 md:p-3 hover:bg-white/10 rounded-lg md:rounded-2xl transition-colors bg-white/5 text-white/50 hover:text-white ${controlsDisabled ? 'opacity-20 pointer-events-none' : ''}`}
             title="Reset Level"
           >
             <RefreshCw size={16} className="md:w-5 md:h-5" />
           </button>
           <button 
             onClick={handleUndo}
-            disabled={history.length === 0}
-            className={`p-1.5 md:p-3 rounded-lg md:rounded-2xl transition-colors bg-white/5 ${history.length > 0 ? 'text-white/50 hover:text-white' : 'opacity-20 pointer-events-none'}`}
+            disabled={history.length === 0 || controlsDisabled}
+            className={`p-1.5 md:p-3 rounded-lg md:rounded-2xl transition-colors bg-white/5 ${history.length > 0 && !controlsDisabled ? 'text-white/50 hover:text-white' : 'opacity-20 pointer-events-none'}`}
             title="Undo Move"
           >
             <Undo2 size={16} className="md:w-5 md:h-5" />
           </button>
-          <button onClick={() => setShowTutorial(true)} className="hidden xs:flex p-1.5 md:p-3 hover:bg-white/10 rounded-lg md:rounded-2xl transition-colors bg-white/5 text-white/50 hover:text-white">
+          <button 
+            onClick={() => setShowTutorial(true)} 
+            disabled={controlsDisabled}
+            className={`hidden xs:flex p-1.5 md:p-3 hover:bg-white/10 rounded-lg md:rounded-2xl transition-colors bg-white/5 text-white/50 hover:text-white ${controlsDisabled ? 'opacity-20 pointer-events-none' : ''}`}
+          >
             <HelpCircle size={16} className="md:w-5 md:h-5" />
           </button>
         </div>
         
         <div className="flex flex-col items-center px-1 flex-1 min-w-0">
           <h2 className="text-[10px] md:text-lg font-black italic tracking-tighter opacity-50 uppercase tracking-widest truncate w-full text-center">Level {currentLevel}</h2>
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => {
+              const url = `${window.location.origin}?level=${currentLevel}`;
+              navigator.clipboard.writeText(`Challenge: Can you solve ColorFlow Level ${currentLevel}? ${url}`);
+              sounds.playClick();
+              alert('Level link copied! Share it with a friend! 🚀');
+            }}
+            className="flex items-center gap-1 text-[8px] font-black uppercase text-cyan-400 mt-1 hover:text-cyan-300"
+          >
+            <Share2 size={10} />
+            Challenge Friend
+          </motion.button>
         </div>
 
         <div className="flex items-center gap-1 md:gap-3">
@@ -387,7 +422,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
               className={`relative p-2 md:p-4 rounded-lg md:rounded-2xl transition-all shadow-xl flex items-center gap-2 ${
                 canUseHint 
                   ? 'text-black bg-yellow-500 hover:scale-105 active:scale-95 shadow-yellow-500/20' 
-                  : 'text-white/10 bg-white/5'
+                  : 'text-white/10 bg-white/5 opacity-20'
               }`}
             >
               {/* Cooldown Ring */}
@@ -502,6 +537,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
                 setHistory(prev => [...prev.slice(-19), prevGrid]); // Keep last 20 moves
                 setMoveCount(prev => prev + 1);
                 setLastMovedColor(colorIdx);
+                sounds.playCombo(Math.min(12, Math.floor(moveCount / 5)));
               }}
               moveCount={moveCount}
               showingSolution={showingSolution}

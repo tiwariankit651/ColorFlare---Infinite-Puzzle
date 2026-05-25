@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { ThemeName, MusicStyle, AccentColor } from '../types';
-import { ChevronLeft, Volume2, VolumeX, Music, Music2, Share2, Star, Wind, Zap, Moon, Leaf } from 'lucide-react';
+import { ChevronLeft, Volume2, VolumeX, Music, Music2, Share2, Star, Wind, Zap, Moon, Leaf, Cloud, Activity, Sun, Palette, Sparkles, Layers } from 'lucide-react';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -25,6 +25,7 @@ interface SettingsScreenProps {
 const THEMES: ThemeName[] = [
   'forest', 'ocean', 'space', 'candy', 'desert',
   'arctic', 'volcano', 'garden', 'city', 'clouds',
+  'cyber', 'zen',
 ];
 
 const PALETTES = [
@@ -75,6 +76,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       case 'garden': return 'from-green-800 to-green-300';
       case 'city': return 'from-slate-900 to-gray-600';
       case 'clouds': return 'from-indigo-700 to-blue-100';
+      case 'cyber': return 'from-black to-fuchsia-900';
+      case 'zen': return 'from-stone-900 to-stone-400';
       default: return 'from-green-900 to-green-500';
     }
   };
@@ -91,17 +94,23 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       </div>
 
       <header className="flex items-center p-6 border-b border-white/5 bg-black/20 backdrop-blur-xl sticky top-0 z-50">
-        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-xl transition-colors mr-4 bg-white/5">
+        <motion.button 
+          whileHover={{ scale: 1.1, x: -2 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={onBack} 
+          className="p-2 hover:bg-white/10 rounded-xl transition-colors mr-4 bg-white/5"
+        >
           <ChevronLeft size={24} />
-        </button>
+        </motion.button>
         <h2 className="text-xl font-black italic tracking-tighter uppercase px-2">Settings</h2>
       </header>
 
       <main className="flex-1 p-6 max-w-lg mx-auto w-full space-y-5 overflow-y-auto z-10 custom-scrollbar">
         <div className="bg-white/5 rounded-3xl overflow-hidden border border-white/5">
-          <button 
+          <motion.button 
+            whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
             onClick={onToggleSound}
-            className="w-full flex items-center justify-between p-6 hover:bg-white/5 transition-colors"
+            className="w-full flex items-center justify-between p-6 transition-colors"
           >
             <div className="flex items-center gap-4">
                 <div className={`p-3 rounded-2xl ${soundOn ? 'bg-accent/20 text-accent' : 'bg-white/10 text-white/30'}`}>
@@ -112,13 +121,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <div className={`w-12 h-6 rounded-full transition-colors relative ${soundOn ? 'bg-accent' : 'bg-white/10'}`}>
                 <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${soundOn ? 'translate-x-6' : ''}`} />
             </div>
-          </button>
+          </motion.button>
 
           <div className="h-[1px] bg-white/5 mx-6" />
 
-          <button 
+          <motion.button 
+            whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
             onClick={onToggleMusic}
-            className="w-full flex items-center justify-between p-6 hover:bg-white/5 transition-colors"
+            className="w-full flex items-center justify-between p-6 transition-colors"
           >
             <div className="flex items-center gap-4">
                 <div className={`p-3 rounded-2xl ${musicOn ? 'bg-accent/20 text-accent' : 'bg-white/10 text-white/30'}`}>
@@ -129,7 +139,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <div className={`w-12 h-6 rounded-full transition-colors relative ${musicOn ? 'bg-accent' : 'bg-white/10'}`}>
                 <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${musicOn ? 'translate-x-6' : ''}`} />
             </div>
-          </button>
+          </motion.button>
         </div>
 
         <div className="bg-white/5 rounded-3xl overflow-hidden border border-white/5 p-6 space-y-4">
@@ -157,19 +167,28 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               { id: 'lofi', name: 'Lo-Fi', icon: Wind, color: 'text-orange-400' },
               { id: 'nature', name: 'Nature', icon: Leaf, color: 'text-green-400' },
               { id: 'retro', name: 'Retro', icon: Zap, color: 'text-purple-400' },
+              { id: 'jazz', name: 'Jazz', icon: Music2, color: 'text-pink-400' },
+              { id: 'ambient', name: 'Ambient', icon: Cloud, color: 'text-blue-300' },
+              { id: 'deep', name: 'Deep', icon: Layers, color: 'text-slate-400' },
+              { id: 'pulse', name: 'Pulse', icon: Activity, color: 'text-red-400' },
+              { id: 'ethereal', name: 'Ethereal', icon: Sun, color: 'text-cyan-300' },
             ].map(style => (
-              <button
+              <motion.button
                 key={style.id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => onSelectMusicStyle(style.id as MusicStyle)}
                 className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
                   musicStyle === style.id 
-                    ? 'bg-white text-black border-white shadow-lg' 
-                    : 'bg-white/5 border-transparent text-white/60 hover:border-white/20'
+                    ? 'bg-white text-black border-white shadow-lg shadow-white/20' 
+                    : 'bg-white/5 border-transparent text-white/60 hover:bg-white/10 hover:border-white/20'
                 }`}
               >
-                <style.icon size={20} className={musicStyle === style.id ? 'text-black' : style.color} />
+                <div className={`p-2 rounded-xl ${musicStyle === style.id ? 'bg-black/5' : 'bg-white/5'}`}>
+                  <style.icon size={18} className={musicStyle === style.id ? 'text-black' : style.color} />
+                </div>
                 <span className="font-bold text-sm tracking-tight">{style.name}</span>
-              </button>
+              </motion.button>
             ))}
           </div>
         </div>
@@ -220,45 +239,75 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </div>
         </div>
 
-        <div className="bg-white/5 rounded-3xl overflow-hidden border border-white/5 p-6 space-y-4">
-          <h3 className="text-sm font-black uppercase tracking-widest text-white/30">Select Theme</h3>
-          <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white/5 rounded-[40px] overflow-hidden border border-white/10 p-8 space-y-6 shadow-2xl relative">
+          <div className="absolute top-0 right-0 p-6 opacity-10">
+            <Sparkles size={48} />
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-accent/20 rounded-2xl">
+              <Palette className="text-accent" size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black uppercase tracking-widest text-white">Visual Themes</h3>
+              <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.3em]">Transform your world</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
             {THEMES.map(theme => (
-              <button
+              <motion.button
                 key={theme}
+                whileHover={{ scale: 1.05, y: -4 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => onSelectTheme(theme)}
-                className={`group flex items-center gap-3 p-3 rounded-2xl border-2 transition-all ${
+                className={`group relative flex flex-col items-center gap-3 p-1 rounded-3xl border-2 transition-all overflow-hidden ${
                   preferredTheme === theme 
-                    ? 'bg-white text-black border-white shadow-lg' 
-                    : 'bg-white/5 border-transparent text-white/60 hover:border-white/20'
+                    ? 'border-white bg-white/20 shadow-[0_0_30px_rgba(255,255,255,0.1)]' 
+                    : 'border-transparent bg-white/5 grayscale hover:grayscale-0'
                 }`}
               >
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getThemeGradient(theme)} border border-white/10`} />
-                <span className="capitalize font-bold text-sm tracking-tight">{theme}</span>
-              </button>
+                <div className={`w-full aspect-square rounded-[1.25rem] bg-gradient-to-br ${getThemeGradient(theme)} shadow-inner flex items-center justify-center relative overflow-hidden`}>
+                  {preferredTheme === theme && (
+                    <div className="absolute inset-0 bg-white/10 animate-pulse" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                </div>
+                <div className="py-2 px-3 w-full flex items-center justify-between">
+                  <span className={`capitalize font-black italic text-[11px] tracking-tight ${preferredTheme === theme ? 'text-white' : 'text-white/40'}`}>
+                    {theme}
+                  </span>
+                  {preferredTheme === theme && (
+                    <div className="w-1.5 h-1.5 bg-accent rounded-full animate-ping" />
+                  )}
+                </div>
+              </motion.button>
             ))}
           </div>
         </div>
 
         <div className="bg-white/5 rounded-3xl overflow-hidden border border-white/5">
-          <button className="w-full flex items-center gap-4 p-6 hover:bg-white/5 transition-colors">
+          <motion.button 
+            whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)', x: 4 }}
+            className="w-full flex items-center gap-4 p-6 transition-colors"
+          >
             <div className="p-3 rounded-2xl bg-indigo-500/20 text-indigo-500">
                 <Share2 size={24} />
             </div>
             <span className="text-lg font-bold">Share App</span>
-          </button>
+          </motion.button>
           
           <div className="h-[1px] bg-white/5 mx-6" />
 
-          <button 
+          <motion.button 
+            whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)', x: 4 }}
             onClick={() => console.log('Rate Us clicked - Opening app store interface...')}
-            className="w-full flex items-center gap-4 p-6 hover:bg-white/5 transition-colors"
+            className="w-full flex items-center gap-4 p-6 transition-colors"
           >
             <div className="p-3 rounded-2xl bg-yellow-500/20 text-yellow-500">
                 <Star size={24} />
             </div>
             <span className="text-lg font-bold">Rate Us</span>
-          </button>
+          </motion.button>
 
           <div className="h-[1px] bg-white/5 mx-6" />
 
@@ -277,9 +326,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </button>
         </div>
 
-        <div className="pt-12 text-center text-white/20">
+        <div className="pt-12 pb-20 text-center text-white/20">
             <p className="text-xs font-black uppercase tracking-[0.5em]">ColorFlow Pro</p>
-            <p className="text-[10px] mt-2 font-bold">VERSION 1.2.0</p>
+            <p className="text-[10px] mt-2 font-bold mb-4">VERSION 1.6.0</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[10px] font-black uppercase tracking-widest transition-all"
+            >
+              Check for Updates
+            </button>
         </div>
       </main>
     </div>

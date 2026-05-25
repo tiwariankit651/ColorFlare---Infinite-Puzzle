@@ -6,6 +6,28 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
   --color-accent: var(--accent-color, #10B981);
+
+  --animate-shimmer: shimmer 2s infinite linear;
+  --animate-spin-slow: spin 8s linear infinite;
+  --animate-spin-reverse: spin-reverse 1s linear infinite;
+
+  @keyframes shimmer {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+  }
+
+  @keyframes spin-reverse {
+    from { transform: rotate(360deg); }
+    to { transform: rotate(0deg); }
+  }
+}
+
+@utility shadow-glow {
+  box-shadow: 0 0 20px rgba(234, 179, 8, 0.4);
+}
+
+@utility shadow-glow-sm {
+  box-shadow: 0 0 15px rgba(234, 179, 8, 0.2);
 }
 
 @layer base {

@@ -1,19 +1,35 @@
 {
   "entities": {
-    "Profile": {
-      "title": "User Profile",
-      "description": "Public profile information for the user",
+    "User": {
+      "title": "User",
+      "description": "User profile and game progress",
       "type": "object",
       "properties": {
+        "uid": { "type": "string" },
         "username": { "type": "string" },
         "avatarEmoji": { "type": "string" },
-        "lastActive": { "type": "string", "format": "date-time" }
+        "level": { "type": "number" },
+        "stars": { "type": "number" },
+        "bestLevel": { "type": "number" },
+        "levelStars": { "type": "object" },
+        "totalGamesPlayed": { "type": "number" },
+        "totalMoves": { "type": "number" },
+        "totalTimeSeconds": { "type": "number" },
+        "threeStarLevels": { "type": "number" },
+        "dailyChallengesCompleted": { "type": "number" },
+        "lastDailyVisit": { "type": "string" },
+        "dailyStreak": { "type": "number" },
+        "achievements": { "type": "array" },
+        "hintsRemaining": { "type": "number" },
+        "hintsUsed": { "type": "number" },
+        "settings": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["username", "avatarEmoji", "lastActive"]
+      "required": ["uid", "username"]
     },
     "LeaderboardEntry": {
       "title": "Leaderboard Entry",
-      "description": "Performance metrics for the global leaderboard",
+      "description": "Public high score data",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
@@ -21,19 +37,48 @@
         "avatarEmoji": { "type": "string" },
         "totalStars": { "type": "number" },
         "currentLevel": { "type": "number" },
+        "dailyChallenges": { "type": "number" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "username", "avatarEmoji", "totalStars", "currentLevel", "updatedAt"]
+      "required": ["userId", "username", "totalStars"]
+    },
+    "TournamentLeaderboardEntry": {
+      "title": "Tournament Leaderboard Entry",
+      "description": "Weekly challenge / tournament entry data",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "avatarEmoji": { "type": "string" },
+        "score": { "type": "number" },
+        "time": { "type": "number" },
+        "moves": { "type": "number" },
+        "levelsCompleted": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "username", "score", "time", "moves", "levelsCompleted"]
     }
   },
   "firestore": {
-    "/users/{userId}": {
-      "schema": "Profile",
-      "description": "User profiles"
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Private user progress"
     },
-    "/leaderboard/{userId}": {
+    "leaderboard/{userId}": {
       "schema": "LeaderboardEntry",
-      "description": "Global leaderboard entries"
+      "description": "Public leaderboard data (All-Time)"
+    },
+    "leaderboard_daily_{date}/{userId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Public daily leaderboard data"
+    },
+    "leaderboard_weekly_{week}/{userId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Public weekly leaderboard data"
+    },
+    "leaderboard_tournament_{week}/{userId}": {
+      "schema": "TournamentLeaderboardEntry",
+      "description": "Public weekly tournament session data"
     }
   }
 }

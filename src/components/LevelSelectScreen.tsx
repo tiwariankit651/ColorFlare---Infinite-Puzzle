@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, Lock, Star } from 'lucide-react';
+import { ChevronLeft, Lock, Star, ChevronRight } from 'lucide-react';
 
 interface LevelSelectScreenProps {
   currentLevel: number;
@@ -15,10 +15,22 @@ export const LevelSelectScreen: React.FC<LevelSelectScreenProps> = ({
   onSelectLevel, 
   onBack 
 }) => {
-  // We'll show up to the next available level beyond the current one or a fixed set
-  // For infinite puzzle, let's show 100 level slots for now? Or just up to current + 9
-  const totalLevelsToShow = Math.max(100, currentLevel + 9);
-  const levels = Array.from({ length: totalLevelsToShow }, (_, i) => i + 1);
+  const levelsPerPage = 100;
+  const [page, setPage] = useState(Math.floor((currentLevel - 1) / levelsPerPage));
+  
+  const startLevel = page * levelsPerPage + 1;
+  const levels = Array.from({ length: levelsPerPage }, (_, i) => startLevel + i);
+  // Allow seeing up to 10 pages ahead, but locking logic will prevent playing.
+  // Or better, just base it on currentLevel so they don't get lost in empty pages.
+  const maxPageAvailable = Math.floor((currentLevel - 1) / levelsPerPage) + 1;
+  
+  const handleNextPage = () => {
+    if (page < maxPageAvailable) setPage(p => p + 1);
+  };
+
+  const handlePrevPage = () => {
+    if (page > 0) setPage(p => p - 1);
+  };
 
   return (
     <div className="fixed inset-0 bg-[#064e3b] flex flex-col text-white overflow-hidden">
@@ -37,13 +49,47 @@ export const LevelSelectScreen: React.FC<LevelSelectScreenProps> = ({
       </div>
 
       <header className="flex items-center p-6 border-b border-white/5 bg-black/20 backdrop-blur-xl sticky top-0 z-50">
-        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-xl transition-colors mr-4 bg-white/5">
+        <motion.button 
+          whileHover={{ scale: 1.1, x: -2 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={onBack} 
+          className="p-2 hover:bg-white/10 rounded-xl transition-colors mr-4 bg-white/5"
+        >
           <ChevronLeft size={24} />
-        </button>
+        </motion.button>
         <h2 className="text-xl font-black italic tracking-tighter">LEVEL SELECT</h2>
       </header>
 
-      <main className="flex-1 p-6 overflow-y-auto z-10">
+      <main className="flex-1 p-6 overflow-y-auto z-10 pb-32">
+        <div className="flex items-center justify-between mb-8 max-w-2xl mx-auto px-2">
+          <button 
+            onClick={handlePrevPage}
+            disabled={page === 0}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
+              page === 0 ? 'opacity-20 cursor-not-allowed' : 'bg-white/5 hover:bg-white/10 text-white'
+            }`}
+          >
+            <ChevronLeft size={20} />
+            <span className="text-[10px] font-black uppercase tracking-widest">Prev</span>
+          </button>
+          
+          <div className="flex flex-col items-center">
+             <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 mb-1">Page</span>
+             <span className="text-lg font-black italic">{page + 1}</span>
+          </div>
+
+          <button 
+            onClick={handleNextPage}
+            disabled={page >= maxPageAvailable}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
+              page >= maxPageAvailable ? 'opacity-20 cursor-not-allowed' : 'bg-white/5 hover:bg-white/10 text-white'
+            }`}
+          >
+            <span className="text-[10px] font-black uppercase tracking-widest">Next</span>
+            <ChevronRight size={20} />
+          </button>
+        </div>
+
         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-4 max-w-2xl mx-auto">
           {levels.map((level) => {
             const isUnlocked = level <= currentLevel;
