@@ -7,12 +7,16 @@ interface SplashScreenProps {
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
   useEffect(() => {
-    const timer = setTimeout(onComplete, 2500);
+    const timer = setTimeout(onComplete, 950);
     return () => clearTimeout(timer);
   }, [onComplete]);
 
   return (
-    <div className="fixed inset-0 bg-[#064e3b] flex flex-col items-center justify-center text-white overflow-hidden">
+    <div 
+      onClick={onComplete}
+      className="fixed inset-0 bg-[#064e3b] flex flex-col items-center justify-center text-white overflow-hidden cursor-pointer select-none"
+      title="Tap to skip"
+    >
       {/* Background Blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div 
@@ -59,8 +63,13 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
         </div>
       </motion.div>
 
-      <div className="absolute bottom-10 text-[10px] font-black uppercase tracking-[0.8em] text-white/10">
-        Mindful Play
+      <div className="absolute bottom-10 flex flex-col items-center gap-1.5 pointer-events-none">
+        <div className="text-[10px] font-black uppercase tracking-[0.8em] text-white/10">
+          Mindful Play
+        </div>
+        <div className="text-[8px] font-black uppercase tracking-[0.25em] text-white/20 animate-pulse font-mono">
+          Tap anywhere to skip
+        </div>
       </div>
     </div>
   );

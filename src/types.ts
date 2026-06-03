@@ -22,6 +22,9 @@ export interface Level {
   grid: Cell[][];
   colorCount: number;
   solutionPaths?: { r: number, c: number }[][];
+  strategyName?: string;
+  strategyDesc?: string;
+  strategyType?: string;
 }
 
 export type ThemeName = 'forest' | 'ocean' | 'space' | 'candy' | 'desert' | 'arctic' | 'volcano' | 'garden' | 'city' | 'clouds' | 'cyber' | 'zen';

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Trophy, Calendar, Sparkles, Lightbulb, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Trophy, Calendar, Sparkles, Lightbulb, RefreshCw, Lock } from 'lucide-react';
 import { LevelGenerator } from '../logic/levelGenerator';
 import { GameBoard } from './GameBoard';
 import { Level } from '../types';
 
 interface DailyChallengeScreenProps {
-  onComplete: (stats: { stars: number, moves: number, time: number }) => void;
+  onComplete: (stats: { stars: number, moves: number, time: number, difficulty: string }) => void;
   onBack: () => void;
   palette?: string[];
   challengesCompleted: number;
@@ -28,11 +28,13 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
   const [level, setLevel] = useState<Level | null>(null);
   const [grid, setGrid] = useState<any[][] | null>(null);
   const [showComplete, setShowComplete] = useState(false);
-  const [movesLeft, setMovesLeft] = useState(50);
+  const [movesLeft, setMovesLeft] = useState(30);
+  const [timeLeft, setTimeLeft] = useState(40);
   const [isGameOver, setIsGameOver] = useState(false);
   const [moveCount, setMoveCount] = useState(0);
   const [startTime, setStartTime] = useState(Date.now());
   const [showingSolution, setShowingSolution] = useState(false);
+  const [showClearModal, setShowClearModal] = useState(false);
   
   const hintTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -71,15 +73,25 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
     setMoveCount(0);
     setStartTime(Date.now());
     setShowingSolution(false);
+    setShowClearModal(false);
 
     // Use difficulty in seed for different levels
     const diffSeed = difficulty === 'easy' ? dailySeed : difficulty === 'medium' ? dailySeed + 100 : dailySeed + 200;
     const generator = new LevelGenerator(diffSeed);
     const dailyLevel = generator.generate(getDifficultyLevelNum(difficulty));
     
-    // Increased move limits as requested
-    const moves = Math.max(50, (dailyLevel.gridSize || 5) * 10);
-    setMovesLeft(moves);
+    // Procedurally scale move and time limits dynamically based on the level's grid size and difficulty
+    const gSize = dailyLevel.gridSize || 5;
+    const initialMoves = difficulty === 'easy' 
+      ? Math.max(50, gSize * 11) 
+      : difficulty === 'medium' 
+      ? Math.max(55, gSize * 10) 
+      : Math.max(60, gSize * 9);
+    
+    const initialTime = difficulty === 'easy' ? 50 : difficulty === 'medium' ? 70 : 90;
+
+    setMovesLeft(initialMoves);
+    setTimeLeft(initialTime);
     setLevel(dailyLevel);
     setGrid(dailyLevel.grid);
 
@@ -87,6 +99,29 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
         if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
     };
   }, [dailySeed, difficulty]);
+
+  const isDifficultyDone = localCompleted[difficulty];
+
+  const isDifficultyUnlocked = (d: 'easy' | 'medium' | 'hard') => {
+    if (d === 'easy') return true;
+    if (d === 'medium') return !!localCompleted.easy;
+    if (d === 'hard') return !!localCompleted.easy && !!localCompleted.medium;
+  };
+
+  useEffect(() => {
+    if (isGameOver || showComplete || isDifficultyDone || showingSolution || !level) return;
+    const intervalTimer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          setIsGameOver(true);
+          clearInterval(intervalTimer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(intervalTimer);
+  }, [isGameOver, showComplete, isDifficultyDone, showingSolution, level]);
 
   const handleComplete = () => {
     setShowComplete(true);
@@ -102,17 +137,18 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
     localStorage.setItem('colorflow_daily_history', JSON.stringify(history));
 
     const starRew = difficulty === 'easy' ? 15 : difficulty === 'medium' ? 25 : 40;
+    
+    // Invoke onComplete immediately to submit scores to the engine
+    onComplete({ stars: starRew, moves: moveCount, time: duration, difficulty });
 
     setTimeout(() => {
       setShowComplete(false);
-      onComplete({ stars: starRew, moves: moveCount, time: duration });
-    }, 2000);
+      setShowClearModal(true);
+    }, 1500);
   };
 
-  const isDifficultyDone = localCompleted[difficulty];
-
   const handleMove = () => {
-    if (showingSolution) return;
+    if (showingSolution || isGameOver) return;
     setMoveCount(prev => prev + 1);
     setMovesLeft(prev => {
         if (prev <= 1) {
@@ -127,9 +163,20 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
     if (level) {
         setGrid(level.grid);
         setMoveCount(0);
-        setMovesLeft(Math.max(50, level.gridSize * 10));
+        const gSize = level.gridSize || 5;
+        const initialMoves = difficulty === 'easy' 
+          ? Math.max(50, gSize * 11) 
+          : difficulty === 'medium' 
+          ? Math.max(55, gSize * 10) 
+          : Math.max(60, gSize * 9);
+        
+        const initialTime = difficulty === 'easy' ? 50 : difficulty === 'medium' ? 70 : 80;
+
+        setMovesLeft(initialMoves);
+        setTimeLeft(initialTime);
         setIsGameOver(false);
         setShowingSolution(false);
+        setShowClearModal(false);
         if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
     }
   };
@@ -177,12 +224,13 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
 
   return (
     <div className="fixed inset-0 bg-[#2d1b06] flex flex-col text-white overflow-hidden">
-      {/* Golden Background Blobs */}
+      {/* Golden Background Blobs (Static, high-accuracy, zero lag) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div 
-          animate={{ x: [0, 80, 0], y: [0, 60, 0] }}
-          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-          className="absolute top-0 right-0 w-[80vw] h-[80vw] bg-yellow-500 rounded-full opacity-10 blur-[120px]"
+        <div 
+          className="absolute top-[-20%] right-[-10%] w-[85vw] h-[85vw] bg-yellow-500 rounded-full opacity-[0.08] blur-[110px]"
+        />
+        <div 
+          className="absolute bottom-[-15%] left-[-15%] w-[65vw] h-[65vw] bg-amber-600 rounded-full opacity-[0.05] blur-[100px]"
         />
       </div>
 
@@ -223,23 +271,40 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
 
         {/* Difficulty Selector */}
         <div className="flex p-2 gap-2 bg-black/20 border-t border-white/5">
-          {(['easy', 'medium', 'hard'] as const).map(d => (
-            <button
-              key={d}
-              onClick={() => setDifficulty(d)}
-              className={`flex-1 py-3 rounded-xl font-black italic text-xs tracking-widest uppercase transition-all flex flex-col items-center gap-1 ${
-                difficulty === d ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-white/5 text-white/40'
-              }`}
-            >
-              <span>{d}</span>
-              {localCompleted[d] && <Trophy size={12} className={difficulty === d ? 'text-black' : 'text-yellow-500'} />}
-            </button>
-          ))}
+          {(['easy', 'medium', 'hard'] as const).map(d => {
+            const unlocked = isDifficultyUnlocked(d);
+            return (
+              <button
+                key={d}
+                onClick={() => {
+                  if (unlocked) setDifficulty(d);
+                }}
+                disabled={!unlocked}
+                className={`flex-1 py-3 rounded-xl font-black italic text-xs tracking-widest uppercase transition-all flex flex-col items-center gap-1 ${
+                  difficulty === d 
+                    ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20 font-bold' 
+                    : unlocked 
+                    ? 'bg-white/5 text-white/40 hover:bg-white/10' 
+                    : 'bg-black/40 text-white/15 cursor-not-allowed border border-white/5/20 opacity-60'
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  {!unlocked && <Lock size={11} className="text-white/40" />}
+                  <span>{d}</span>
+                </span>
+                {localCompleted[d] ? (
+                  <Trophy size={11} className={difficulty === d ? 'text-black' : 'text-yellow-500'} />
+                ) : (
+                  !unlocked && <span className="text-[8px] text-white/20 font-bold">LOCKED</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center p-4 max-w-lg mx-auto w-full relative">
-        {isDifficultyDone && (
+        {isDifficultyDone && !showClearModal && (
             <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-8 text-center rounded-[2rem]">
                 <div className="bg-yellow-500 text-black p-8 rounded-[3rem] shadow-2xl rotate-3">
                     <Trophy size={48} className="mx-auto mb-4" />
@@ -268,26 +333,38 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
                 </div>
             </motion.div>
         )}
-        <div className="mb-4 flex items-center justify-center gap-8 w-full">
-            <div className="flex flex-col items-center">
-                <span className="text-[10px] text-white/30 font-black tracking-widest uppercase mb-1">Moves Remaining</span>
+        <div className="mb-4 grid grid-cols-3 gap-2 w-full text-center bg-black/20 p-3.5 rounded-2xl border border-white/5">
+            <div className="flex flex-col items-center justify-center">
+                <span className="text-[9px] text-white/30 font-black tracking-widest uppercase mb-1">Moves Left</span>
                 <motion.div 
-                    key={movesLeft}
-                    initial={{ scale: 1.5, color: '#f59e0b' }}
-                    animate={{ scale: 1, color: movesLeft < 10 ? '#ef4444' : '#ffffff' }}
-                    className="text-3xl font-black italic"
+                    animate={{ color: movesLeft < 6 ? '#ef4444' : '#ffffff' }}
+                    className="text-2xl font-black italic font-mono"
                 >
                     {movesLeft}
                 </motion.div>
             </div>
+
+            <div className="flex flex-col items-center justify-center border-x border-white/10">
+                <span className="text-[9px] text-white/30 font-black tracking-widest uppercase mb-1">Timer</span>
+                <motion.div 
+                    animate={{ color: timeLeft <= 10 ? '#ef4444' : '#f59e0b' }}
+                    className={`text-2xl font-black italic font-mono ${timeLeft <= 10 ? 'animate-pulse' : ''}`}
+                >
+                    {timeLeft}s
+                </motion.div>
+            </div>
             
-            <div className="flex flex-col items-center">
-                <span className="text-[10px] text-white/30 font-black tracking-widest uppercase mb-1">Mode Reward</span>
-                <div className="flex items-center gap-2">
-                    <span className="text-yellow-500 text-lg font-black italic">
+            <div className="flex flex-col items-center justify-center">
+                <span className="text-[9px] text-white/30 font-black tracking-widest uppercase mb-1">Reward</span>
+                <div className="flex flex-col items-center justify-center gap-0.5 leading-none">
+                    <span className="text-yellow-500 text-sm font-black italic">
                       +{difficulty === 'easy' ? 15 : difficulty === 'medium' ? 25 : 40} ⭐
                     </span>
-                    {difficulty === 'hard' && <span className="text-yellow-300 text-lg font-black italic">+1 💡</span>}
+                    {difficulty === 'hard' && (
+                        <span className="text-yellow-300 text-[10px] font-black uppercase tracking-tight">
+                          +1 💡 BONUS
+                        </span>
+                    )}
                 </div>
             </div>
         </div>
@@ -306,14 +383,15 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
           <AnimatePresence>
             {isGameOver && !showComplete && !isDifficultyDone && (
                <motion.div 
+                key="daily-failed"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md rounded-3xl"
                >
                  <div className="text-center p-12">
                     <RefreshCw size={64} className="mx-auto mb-6 text-white/20 animate-spin-reverse" />
-                    <h2 className="text-3xl font-black italic mb-2 tracking-tight uppercase">Out of Moves</h2>
-                    <p className="text-white/60 mb-8 font-bold text-sm">Don't give up! Reset the flow and try again.</p>
+                    <h2 className="text-3xl font-black italic mb-2 tracking-tight uppercase">Challenge Failed</h2>
+                    <p className="text-white/60 mb-8 font-bold text-sm">You ran out of moves or time! Reset the flow and try again.</p>
                     <button 
                         onClick={resetLevel}
                         className="bg-yellow-500 text-black px-10 py-4 rounded-2xl font-black italic shadow-2xl flex items-center gap-2 mx-auto"
@@ -327,6 +405,7 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
 
             {showComplete && (
               <motion.div
+                key="daily-complete-splash"
                 initial={{ scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 1.5, opacity: 0 }}
@@ -341,10 +420,81 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
                 </div>
               </motion.div>
             )}
+
+            {showClearModal && (
+              <motion.div
+                key="daily-clear-modal"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md rounded-3xl p-6"
+              >
+                <div className="text-center p-6 w-full max-w-sm">
+                  <Trophy size={48} className="mx-auto mb-4 text-yellow-500 animate-bounce" />
+                  <h3 className="text-2xl font-black italic mb-1 uppercase tracking-tight text-white">{difficulty} Cleared!</h3>
+                  <p className="text-yellow-500 font-extrabold text-xs tracking-widest uppercase mb-4">
+                    +{difficulty === 'easy' ? 15 : difficulty === 'medium' ? 25 : 40} STARS CLAIMED!
+                  </p>
+                  
+                  <div className="bg-black/30 p-3.5 rounded-2xl border border-white/5 mb-6 text-xs text-white/75 flex justify-around font-mono">
+                    <div>
+                      <span className="block text-[8px] text-white/40 uppercase font-black tracking-wider">Moves</span>
+                      <span className="text-sm font-black text-white">{moveCount}</span>
+                    </div>
+                    <div className="border-r border-white/10" />
+                    <div>
+                      <span className="block text-[8px] text-white/40 uppercase font-black tracking-wider">Time</span>
+                      <span className="text-sm font-black text-yellow-500">
+                        {Math.floor((Date.now() - startTime) / 1000)}s
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5">
+                    {difficulty === 'easy' && (
+                      <button 
+                        onClick={() => {
+                          setDifficulty('medium');
+                          setShowClearModal(false);
+                        }}
+                        className="w-full bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-black py-3.5 rounded-xl font-black italic text-xs uppercase tracking-widest transition-all shadow-xl shadow-yellow-500/20 font-bold"
+                      >
+                        Play Medium Challenge ⏭
+                      </button>
+                    )}
+                    
+                    {difficulty === 'medium' && (
+                      <button 
+                        onClick={() => {
+                          setDifficulty('hard');
+                          setShowClearModal(false);
+                        }}
+                        className="w-full bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-black py-3.5 rounded-xl font-black italic text-xs uppercase tracking-widest transition-all shadow-xl shadow-yellow-500/20 font-bold"
+                      >
+                        Play Hard Challenge ⏭
+                      </button>
+                    )}
+
+                    {difficulty === 'hard' && (
+                      <div className="text-yellow-400 font-extrabold text-[10px] uppercase tracking-wider mb-2">
+                        🏆 CONGRATULATIONS! ALL CHALLENGES ARE SECURED TODAY!
+                      </div>
+                    )}
+
+                    <button 
+                      onClick={onBack}
+                      className="w-full bg-white/5 hover:bg-white/10 text-slate-350 py-2.5 rounded-xl font-black italic text-[11px] uppercase tracking-widest transition-all"
+                    >
+                      Back to Hub
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
 
-        <div className="mt-8 text-center max-w-[280px]">
+         <div className="mt-8 text-center max-w-[280px]">
             <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] leading-relaxed">
                 Connect all colors to claim your <span className="text-yellow-500">{difficulty} Trophy</span>. Solvable, dense flows.
             </p>

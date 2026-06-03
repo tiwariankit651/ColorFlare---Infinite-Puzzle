@@ -91,6 +91,11 @@ export const LeaderboardService = {
     if (!auth.currentUser) return;
     const userId = auth.currentUser.uid;
     
+    // Strict sanitization of input values to prevent NaN propagation
+    const safeInputStars = isNaN(Number(totalStars)) ? 0 : Math.max(0, Number(totalStars));
+    const safeInputLevel = isNaN(Number(currentLevel)) ? 1 : Math.max(1, Number(currentLevel));
+    const safeInputDaily = isNaN(Number(dailyChallenges)) ? 0 : Math.max(0, Number(dailyChallenges));
+
     try {
       await runTransaction(db, async (transaction) => {
         const dailyKey = this.getDailyKey();
@@ -104,11 +109,15 @@ export const LeaderboardService = {
         const allTimeDoc = await transaction.get(allTimeRef);
         const existingData = allTimeDoc.exists() ? allTimeDoc.data() as LeaderboardEntry : null;
 
+        const existingStars = isNaN(Number(existingData?.totalStars)) ? 0 : Number(existingData?.totalStars);
+        const existingLevel = isNaN(Number(existingData?.currentLevel)) ? 1 : Number(existingData?.currentLevel);
+        const existingDaily = isNaN(Number(existingData?.dailyChallenges)) ? 0 : Number(existingData?.dailyChallenges);
+
         // ONLY update if values are actually higher OR if they are basic info (username/emoji)
         // This prevents race conditions from multiple devices downgrading scores
-        const finalStars = Math.max(totalStars, existingData?.totalStars || 0);
-        const finalLevel = Math.max(currentLevel, existingData?.currentLevel || 0);
-        const finalDaily = Math.max(dailyChallenges, existingData?.dailyChallenges || 0);
+        const finalStars = Math.max(safeInputStars, existingStars);
+        const finalLevel = Math.max(safeInputLevel, existingLevel);
+        const finalDaily = Math.max(safeInputDaily, existingDaily);
 
         const updatePayload = {
           userId,
@@ -148,6 +157,39 @@ export const LeaderboardService = {
       daily: 'dailyChallenges'
     };
 
+    const sanitizeDocs = (docs: any[]): LeaderboardEntry[] => {
+      return docs.map(d => {
+        const rawData = d.data();
+        const uid = d.id;
+        
+        let currentLevel = Number(rawData.currentLevel);
+        if (isNaN(currentLevel) || currentLevel < 1) {
+          currentLevel = 1;
+        }
+
+        let totalStars = Number(rawData.totalStars);
+        if (isNaN(totalStars) || totalStars < 0) {
+          // A friendly fallback: approximate based on completed levels (averaging 2.5 stars per level)
+          totalStars = Math.max(0, Math.round((currentLevel - 1) * 2.5));
+        }
+        
+        let dailyChallenges = Number(rawData.dailyChallenges);
+        if (isNaN(dailyChallenges) || dailyChallenges < 0) {
+          dailyChallenges = 0;
+        }
+
+        return {
+          ...rawData,
+          userId: uid,
+          username: rawData.username || 'Anonymous Player',
+          avatarEmoji: rawData.avatarEmoji || '🎮',
+          totalStars,
+          currentLevel,
+          dailyChallenges
+        } as LeaderboardEntry;
+      });
+    };
+
     let rawEntries: LeaderboardEntry[] = [];
     try {
       const q = query(
@@ -160,9 +202,9 @@ export const LeaderboardService = {
       
       if (snapshot.empty && timeframe !== 'all') {
         const cachedSnapshot = await getDocs(q);
-        rawEntries = cachedSnapshot.docs.map(doc => ({ ...doc.data(), userId: doc.id } as LeaderboardEntry));
+        rawEntries = sanitizeDocs(cachedSnapshot.docs);
       } else {
-        rawEntries = snapshot.docs.map(doc => ({ ...doc.data(), userId: doc.id } as LeaderboardEntry));
+        rawEntries = sanitizeDocs(snapshot.docs);
       }
     } catch (error) {
       console.warn("Server fetch failed, falling back to cache", error);
@@ -173,7 +215,7 @@ export const LeaderboardService = {
           limit(limitCount)
         );
         const snapshot = await getDocs(q);
-        rawEntries = snapshot.docs.map(doc => ({ ...doc.data(), userId: doc.id } as LeaderboardEntry));
+        rawEntries = sanitizeDocs(snapshot.docs);
       } catch (innerError) {
         rawEntries = [];
       }
@@ -216,6 +258,155 @@ export const LeaderboardService = {
     } catch (e) {
       console.error("Failed to submit tournament score:", e);
     }
+  },
+
+  getPreviousWeeklyKey() {
+    const d = new Date();
+    const day = d.getUTCDay() || 7; // Sunday is 7, Monday is 1
+    const date = d.getUTCDate();
+    const diff = date - day + 1 - 7; // Get Monday of previous week
+    d.setUTCDate(diff);
+    d.setUTCHours(0, 0, 0, 0);
+    return `w_${d.toISOString().split('T')[0]}`;
+  },
+
+  async submitTournamentDailyScore(
+    username: string, 
+    avatarEmoji: string, 
+    dayIndex: number, 
+    dailyScore: number, 
+    dailyTime: number, 
+    dailyMoves: number, 
+    dailyLevels: number
+  ) {
+    if (authReady) await authReady;
+    if (!auth.currentUser) return;
+    const userId = auth.currentUser.uid;
+    const weeklyKey = this.getWeeklyKey();
+    const collectionName = `leaderboard_tournament_${weeklyKey}`;
+    const docRef = doc(db, collectionName, userId);
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(docRef);
+        let runs: Record<string, any> = {};
+        let existingDocData: any = {};
+        
+        if (snap.exists()) {
+          existingDocData = snap.data();
+          runs = existingDocData.runs || {};
+        }
+
+        const runKey = `day_${dayIndex}`;
+        const existingRun = runs[runKey];
+
+        let shouldUpdateRun = false;
+        if (!existingRun) {
+          shouldUpdateRun = true;
+        } else {
+          if (dailyScore > existingRun.score) {
+            shouldUpdateRun = true;
+          } else if (dailyScore === existingRun.score) {
+            if (dailyMoves < existingRun.moves) {
+              shouldUpdateRun = true;
+            } else if (dailyMoves === existingRun.moves) {
+              if (dailyTime < existingRun.time) {
+                shouldUpdateRun = true;
+              }
+            }
+          }
+        }
+
+        if (shouldUpdateRun) {
+          runs[runKey] = {
+            score: dailyScore,
+            time: dailyTime,
+            moves: dailyMoves,
+            levelsCompleted: dailyLevels,
+            updatedAt: Date.now()
+          };
+        }
+
+        let totalScore = 0;
+        let totalTime = 0;
+        let totalMoves = 0;
+        let totalLevels = 0;
+
+        Object.keys(runs).forEach(k => {
+          const r = runs[k];
+          totalScore += r.score || 0;
+          totalTime += r.time || 0;
+          totalMoves += r.moves || 0;
+          totalLevels += r.levelsCompleted || 0;
+        });
+
+        const payload = {
+          userId,
+          username: username || existingDocData.username || 'Anonymous Flow',
+          avatarEmoji: avatarEmoji || existingDocData.avatarEmoji || '🎮',
+          runs,
+          score: totalScore,
+          time: totalTime,
+          moves: totalMoves,
+          levelsCompleted: totalLevels,
+          updatedAt: serverTimestamp()
+        };
+
+        transaction.set(docRef, payload, { merge: true });
+        console.log(`Tournament daily score submitted/updated in transaction for Day ${dayIndex}:`, payload);
+      });
+    } catch (e) {
+      console.error("Failed to submit tournament daily score transaction:", e);
+    }
+  },
+
+  async getPreviousTournamentLeaderboard(limitCount = 15) {
+    const prevWeeklyKey = this.getPreviousWeeklyKey();
+    const collectionName = `leaderboard_tournament_${prevWeeklyKey}`;
+    
+    let rawEntries: any[] = [];
+    try {
+      const q = query(
+        collection(db, collectionName), 
+        orderBy('score', 'desc'),
+        limit(limitCount)
+      );
+      
+      const snapshot = await getDocsFromServer(q);
+      
+      if (snapshot.empty) {
+        const cachedSnapshot = await getDocs(q);
+        rawEntries = cachedSnapshot.docs.map(doc => ({ ...doc.data(), userId: doc.id } as any));
+      } else {
+        rawEntries = snapshot.docs.map(doc => ({ ...doc.data(), userId: doc.id } as any));
+      }
+    } catch (error) {
+      console.warn("Previous tournament fetch from server failed, falling back to cache", error);
+      try {
+        const q = query(
+          collection(db, collectionName), 
+          orderBy('score', 'desc'),
+          limit(limitCount)
+        );
+        const snapshot = await getDocs(q);
+        rawEntries = snapshot.docs.map(doc => ({ ...doc.data(), userId: doc.id } as any));
+      } catch (innerError) {
+        rawEntries = [];
+      }
+    }
+
+    const merged = [...rawEntries];
+
+    merged.sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      if (a.moves !== b.moves) {
+        return a.moves - b.moves;
+      }
+      return a.time - b.time;
+    });
+    return merged.slice(0, limitCount);
   },
 
   async getTournamentLeaderboard(limitCount = 15) {

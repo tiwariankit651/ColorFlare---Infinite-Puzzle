@@ -54,6 +54,24 @@ export class PathValidator {
       const curr = queue.shift()!;
       if (curr.r === target.r && curr.c === target.c) return true;
 
+      // Teleporter jump logic
+      const currentCell = level.grid[curr.r][curr.c];
+      if (currentCell && currentCell.type === CellType.TELEPORTER) {
+        const pairId = currentCell.colorIndex;
+        const otherPortal = level.grid.flat().find(f => 
+          f.type === CellType.TELEPORTER && 
+          f.colorIndex === pairId && 
+          (f.row !== curr.r || f.col !== curr.c)
+        );
+        if (otherPortal && (otherPortal.pathColorIndex === colorIndex || otherPortal.isPath)) {
+          const key = `${otherPortal.row},${otherPortal.col}`;
+          if (!visited.has(key)) {
+            visited.add(key);
+            queue.push({ r: otherPortal.row, c: otherPortal.col });
+          }
+        }
+      }
+
       for (const [dr, dc] of dirs) {
         const nr = curr.r + dr;
         const nc = curr.c + dc;

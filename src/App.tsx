@@ -23,7 +23,7 @@ import { sounds } from './lib/sounds';
 import { GameStorage, StorageData } from './logic/storage';
 import { LeaderboardService } from './services/leaderboardService';
 import { UserService } from './services/userService';
-import { auth } from './firebase';
+import { auth, authReady } from './firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { AchievementService, Achievement } from './services/achievementService';
 import confetti from 'canvas-confetti';
@@ -95,16 +95,36 @@ export default function App() {
 
   useEffect(() => {
     // Initial cloud load after auth is ready
+    let active = true;
     const syncWithCloud = async () => {
-      if (auth.currentUser) {
-        const cloudData = await UserService.loadProgress();
-        if (cloudData) {
-          setData(prev => ({ ...prev, ...cloudData }));
+      try {
+        if (authReady) {
+          await authReady;
         }
+        if (!active) return;
+        
+        if (auth.currentUser) {
+          const cloudData = await UserService.loadProgress();
+          if (cloudData && active) {
+            setData(prev => {
+              const merged = { ...prev, ...cloudData };
+              // Ensure we don't downgrade levels or stars if local state is higher
+              merged.stars = Math.max(Number(prev.stars) || 0, Number(cloudData.stars) || 0);
+              merged.level = Math.max(Number(prev.level) || 1, Number(cloudData.level) || 1);
+              merged.bestLevel = Math.max(Number(prev.bestLevel) || 1, Number(cloudData.bestLevel) || 1);
+              return merged;
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to dynamic sync initial cloud progress:", err);
       }
     };
     
     syncWithCloud();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleSplashComplete = () => {
@@ -117,6 +137,7 @@ export default function App() {
   const musicStyle = data.musicStyle || 'calm';
   const accentColor = data.accentColor || 'green';
   const volume = data.volume ?? 0.5;
+  const hardModeOn = !!data.hardModeOn;
 
   const [gameLevel, setGameLevel] = useState<number | null>(null);
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
@@ -222,7 +243,12 @@ export default function App() {
     }
   }, [newAchievements]);
 
-  const handleLevelComplete = ({ stars: starsEarned, moves, time }: { stars: number, moves: number, time: number }) => {
+  const handleLevelComplete = (stats: { stars: number, moves: number, time: number }) => {
+    // Highly defensive cleansing of completed level statistics
+    const starsEarned = typeof stats?.stars === 'number' && !isNaN(stats.stars) ? Math.max(1, stats.stars) : 1;
+    const moves = typeof stats?.moves === 'number' && !isNaN(stats.moves) ? Math.max(0, stats.moves) : 0;
+    const time = typeof stats?.time === 'number' && !isNaN(stats.time) ? Math.max(0, stats.time) : 0;
+
     const activeLvl = gameLevel || data.level;
     const isPlayingCurrent = gameLevel === null || gameLevel === data.level;
     
@@ -237,9 +263,9 @@ export default function App() {
 
     updateData(prev => {
       const oldLevelStars = prev.levelStars || {};
-      const oldStarsForLevel = oldLevelStars[activeLvl] || 0;
+      const oldStarsForLevel = Number(oldLevelStars[activeLvl]) || 0;
       const starDifference = Math.max(0, starsEarned - oldStarsForLevel);
-      const nextStars = prev.stars + starDifference;
+      const nextStars = (Number(prev.stars) || 0) + starDifference;
       
       let nextLevel = prev.level;
       let nextBestLevel = prev.bestLevel;
@@ -448,9 +474,10 @@ export default function App() {
         {screen === 'daily' && (
           <motion.div
             key="daily"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 1.1, opacity: 0 }}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
             className="absolute inset-0"
           >
             <DailyChallengeScreen 
@@ -471,15 +498,18 @@ export default function App() {
                   origin: { y: 0.6 }
                 });
 
-                updateData(prev => ({
-                  ...prev, 
-                  stars: prev.stars + stats.stars,
-                  hintsRemaining: (prev.hintsRemaining || 0) + 1,
-                  dailyChallengesCompleted: (prev.dailyChallengesCompleted || 0) + 1,
-                  lastDailyChallengeDate: new Date().toDateString(),
-                  totalMoves: (prev.totalMoves || 0) + stats.moves,
-                  totalTimeSeconds: (prev.totalTimeSeconds || 0) + stats.time
-                }));
+                updateData(prev => {
+                  const bonusHint = stats.difficulty === 'hard' ? 1 : 0;
+                  return {
+                    ...prev, 
+                    stars: prev.stars + stats.stars,
+                    hintsRemaining: (prev.hintsRemaining || 0) + bonusHint,
+                    dailyChallengesCompleted: (prev.dailyChallengesCompleted || 0) + 1,
+                    lastDailyChallengeDate: new Date().toDateString(),
+                    totalMoves: (prev.totalMoves || 0) + stats.moves,
+                    totalTimeSeconds: (prev.totalTimeSeconds || 0) + stats.time
+                  };
+                });
               }}
               onBack={() => { playClick(); setScreen('home'); }}
               palette={data.palette}
@@ -512,6 +542,7 @@ export default function App() {
               hintsRemaining={data.hintsRemaining || 0}
               palette={data.palette}
               theme={currentTheme}
+              hardModeOn={hardModeOn}
             />
           </motion.div>
         )}
@@ -541,6 +572,8 @@ export default function App() {
               onSelectAccentColor={(c) => { updateData(prev => ({ ...prev, accentColor: c })); sounds.playClick(); }}
               volume={volume}
               onVolumeChange={(v) => { updateData(prev => ({ ...prev, volume: v })); }}
+              hardModeOn={hardModeOn}
+              onToggleHardMode={() => updateData(prev => ({ ...prev, hardModeOn: !prev.hardModeOn }))}
             />
           </motion.div>
         )}
@@ -561,6 +594,12 @@ export default function App() {
                 updateData(prev => ({
                   ...prev,
                   stars: prev.stars + amount
+                }));
+              }}
+              onUnlockHint={(amount) => {
+                updateData(prev => ({
+                  ...prev,
+                  hintsRemaining: (prev.hintsRemaining || 0) + amount
                 }));
               }}
               onUpdateRank={(rank) => {
@@ -594,7 +633,7 @@ export default function App() {
       {/* Daily Reward Modal */}
       <AnimatePresence>
         {dailyReward && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+          <div key="daily-reward-popup-wrapper" className="fixed inset-0 z-[200] flex items-center justify-center p-6">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

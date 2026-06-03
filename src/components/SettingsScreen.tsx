@@ -20,6 +20,8 @@ interface SettingsScreenProps {
   onSelectAccentColor: (color: AccentColor) => void;
   volume: number;
   onVolumeChange: (volume: number) => void;
+  hardModeOn: boolean;
+  onToggleHardMode: () => void;
 }
 
 const THEMES: ThemeName[] = [
@@ -62,7 +64,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   accentColor,
   onSelectAccentColor,
   volume,
-  onVolumeChange
+  onVolumeChange,
+  hardModeOn,
+  onToggleHardMode
 }) => {
   const getThemeGradient = (themeName: ThemeName) => {
     switch (themeName) {
@@ -138,6 +142,27 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </div>
             <div className={`w-12 h-6 rounded-full transition-colors relative ${musicOn ? 'bg-accent' : 'bg-white/10'}`}>
                 <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${musicOn ? 'translate-x-6' : ''}`} />
+            </div>
+          </motion.button>
+
+          <div className="h-[1px] bg-white/5 mx-6" />
+
+          <motion.button 
+            whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+            onClick={onToggleHardMode}
+            className="w-full flex items-center justify-between p-6 transition-colors"
+          >
+            <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-2xl ${hardModeOn ? 'bg-red-500/20 text-red-500' : 'bg-white/10 text-white/30'}`}>
+                    <Zap size={24} className={hardModeOn ? 'text-red-500 animate-pulse' : ''} />
+                </div>
+                <div className="text-left font-sans">
+                  <span className="text-lg font-bold block leading-tight">Hard Mode</span>
+                  <span className="text-[11px] text-white/40 font-bold uppercase tracking-wider block mt-1">Rotators & Teleporters Active</span>
+                </div>
+            </div>
+            <div className={`w-12 h-6 rounded-full transition-colors relative ${hardModeOn ? 'bg-red-500' : 'bg-white/10'}`}>
+                <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${hardModeOn ? 'translate-x-6' : ''}`} />
             </div>
           </motion.button>
         </div>

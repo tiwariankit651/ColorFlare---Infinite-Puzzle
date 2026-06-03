@@ -38,6 +38,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ level, grid, setGrid, onCo
 
   const handleCellInteraction = useCallback((r: number, c: number) => {
     if (showingSolution) return;
+    if (r < 0 || r >= grid.length || c < 0 || c >= (grid[r]?.length || 0)) return;
     const cell = grid[r][c];
 
     // Start from a dot

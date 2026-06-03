@@ -35,6 +35,7 @@ export interface StorageData {
   accentColor: AccentColor;
   volume: number;
   tournamentRank?: number;
+  hardModeOn: boolean;
 }
 
 const DEFAULT_DATA: StorageData = {
@@ -62,7 +63,8 @@ const DEFAULT_DATA: StorageData = {
   avatarEmoji: '😀',
   musicStyle: 'calm',
   accentColor: 'green',
-  volume: 0.5
+  volume: 0.5,
+  hardModeOn: false
 };
 
 export const GameStorage = {
@@ -72,7 +74,32 @@ export const GameStorage = {
     try {
       const parsed = JSON.parse(saved);
       // Ensure we merge with defaults to handle new fields added in updates
-      return { ...DEFAULT_DATA, ...parsed };
+      const merged = { ...DEFAULT_DATA, ...parsed };
+      
+      // Heal any NaN values that might have seeped in during previous sessions
+      if (typeof merged.stars !== 'number' || isNaN(merged.stars)) {
+        merged.stars = 0;
+      }
+      if (typeof merged.level !== 'number' || isNaN(merged.level)) {
+        merged.level = 1;
+      }
+      if (typeof merged.bestLevel !== 'number' || isNaN(merged.bestLevel)) {
+        merged.bestLevel = 1;
+      }
+      if (typeof merged.dailyChallengesCompleted !== 'number' || isNaN(merged.dailyChallengesCompleted)) {
+        merged.dailyChallengesCompleted = 0;
+      }
+      if (typeof merged.totalMoves !== 'number' || isNaN(merged.totalMoves)) {
+        merged.totalMoves = 0;
+      }
+      if (typeof merged.totalTimeSeconds !== 'number' || isNaN(merged.totalTimeSeconds)) {
+        merged.totalTimeSeconds = 0;
+      }
+      if (typeof merged.totalGamesPlayed !== 'number' || isNaN(merged.totalGamesPlayed)) {
+        merged.totalGamesPlayed = 0;
+      }
+      
+      return merged;
     } catch (e) {
       console.error("Failed to load game data", e);
       return DEFAULT_DATA;

@@ -17,6 +17,7 @@ interface GameScreenProps {
   theme?: ThemeName;
   onHintUsed?: () => void;
   hintsRemaining?: number;
+  hardModeOn?: boolean;
 }
 
 const DEFAULT_COLORS = [
@@ -34,7 +35,7 @@ const PERFECT_MSGS = ['💯 Perfect!', '✨ Brilliant!', '🌟 Superb!', '🚀 A
 const GREAT_MSGS = ['💪 Great Job!', '👏 Well Done!', '🔥 On Fire!', '⭐ Amazing!'];
 const GOOD_MSGS = ['🎉 Hurray!', '🏆 Congrats!', '😎 Cool!', '🥳 Happy!'];
 
-export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete, onBack, onHintUsed, palette, theme, hintsRemaining = 0 }) => {
+export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete, onBack, onHintUsed, palette, theme, hintsRemaining = 0, hardModeOn = false }) => {
   const gameColors = palette || DEFAULT_COLORS;
   const [level, setLevel] = useState<Level | null>(null);
 
@@ -94,7 +95,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     // Generate a stable seed for this level to ensure consistency across users and sessions
     const levelSeed = (currentLevel * 15485863) % 2147483647;
     const levelGenerator = new LevelGenerator(levelSeed);
-    const newLevel = levelGenerator.generate(currentLevel);
+    let newLevel = levelGenerator.generate(currentLevel);
+    
+    if (hardModeOn) {
+      newLevel = levelGenerator.applyHardMode(newLevel);
+    }
     
     setLevel(newLevel);
     setGrid(newLevel.grid);
@@ -156,7 +161,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
   };
 
   const skipLevel = () => {
-    onComplete(1); // skip gives 1 star
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    onComplete({ stars: 1, moves: moveCount, time: isNaN(elapsed) ? 0 : elapsed }); // skip gives 1 star
   };
 
   useEffect(() => {
@@ -475,6 +481,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
           <span>{level.gridSize}x{level.gridSize} GRID</span>
         </div>
 
+
         {/* Interactive Tutorial Guide */}
         {(currentLevel === 1 || currentLevel === 2) && moveCount < 5 && level.solutionPaths && level.solutionPaths.length > 0 && (
           <motion.div 
@@ -602,7 +609,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
                   setIsReviewing(false);
                   const totalCells = level?.gridSize ? level.gridSize * level.gridSize : 25;
                   const starsEarned = moveCount <= totalCells * 1.2 ? 3 : moveCount <= totalCells * 1.8 ? 2 : 1;
-                  onComplete(starsEarned);
+                  onComplete({ stars: starsEarned, moves: moveCount, time: completionTime || 0 });
                 }}
                 className="bg-white text-black px-6 py-2 rounded-xl font-black italic text-xs tracking-tighter"
               >
