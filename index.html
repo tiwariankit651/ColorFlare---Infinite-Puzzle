@@ -7,28 +7,31 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="ColorFlow" />
-    <link rel="icon" type="image/png" href="icon-512.png" />
-    <link rel="apple-touch-icon" href="icon-512.png" />
-    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" type="image/png" href="/icon-512.png" />
+    <link rel="apple-touch-icon" href="/icon-512.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <script>
+      window.addEventListener('error', (e) => {
+        const msg = String(e.message || e || '').toLowerCase();
+        if (msg.includes('websocket') || msg.includes('vite') || msg.includes('closed without opened')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', (e) => {
+        const reason = e.reason;
+        const msg = String(reason?.message || reason || '').toLowerCase();
+        if (msg.includes('websocket') || msg.includes('vite') || msg.includes('closed without opened')) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+    </script>
     <title>ColorFlow: Zen Puzzle</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(registration => {
-            console.log('SW registered');
-            
-            // Check for updates periodically
-            setInterval(() => {
-              registration.update();
-            }, 1000 * 60 * 60); // Every hour
-          });
-        });
-      }
-    </script>
   </body>
 </html>
 

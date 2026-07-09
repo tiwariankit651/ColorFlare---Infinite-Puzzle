@@ -16,7 +16,18 @@ interface DailyChallengeScreenProps {
 }
 
 const DEFAULT_COLORS = [
-  '#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#71717A'
+  '#EF4444', // red-500
+  '#3B82F6', // blue-500
+  '#10B981', // emerald-500
+  '#F59E0B', // amber-500
+  '#8B5CF6', // violet-500
+  '#06B6D4', // cyan-500
+  '#EC4899', // pink-500
+  '#F97316', // orange-500
+  '#84CC16', // lime-500
+  '#A855F7', // purple-500
+  '#14B8A6', // teal-500
+  '#F43F5E', // neon rose
 ];
 
 export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({ 
@@ -147,8 +158,8 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
     }, 1500);
   };
 
-  const handleMove = () => {
-    if (showingSolution || isGameOver) return;
+  const handleMove = (nextGrid: any, colorIndex: number, isStartStroke?: boolean) => {
+    if (isGameOver) return;
     setMoveCount(prev => prev + 1);
     setMovesLeft(prev => {
         if (prev <= 1) {
@@ -184,34 +195,14 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
   const handleUseHint = () => {
     if (!level || showingSolution || hintsRemaining <= 0) return;
 
-    const capturedGrid = grid!.map(row => row.map(cell => ({ ...cell })));
-    
-    const solutionGrid = level.grid.map(row => row.map(cell => ({ 
-        ...cell, 
-        isPath: false, 
-        pathColorIndex: undefined 
-    })));
-    
-    level.solutionPaths.forEach((path, colorIdx) => {
-        path.forEach(p => {
-            const cell = solutionGrid[p.r][p.c];
-            if (cell.type !== 'dot') {
-                cell.isPath = true;
-                cell.pathColorIndex = colorIdx;
-            }
-        });
-    });
-
-    setGrid(solutionGrid);
     setShowingSolution(true);
     onHintUsed?.();
 
     if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
     hintTimeoutRef.current = setTimeout(() => {
-        setGrid(capturedGrid);
         setShowingSolution(false);
         hintTimeoutRef.current = null;
-    }, 6000);
+    }, 12000);
   };
 
   if (!level || !grid) {
@@ -325,11 +316,11 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
             <motion.div 
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="absolute top-0 left-0 right-0 z-50 text-center"
+                className="absolute -top-12 left-0 right-0 z-50 text-center"
             >
-                <div className="bg-yellow-500 text-black px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-2 shadow-xl">
-                    <Lightbulb size={12} fill="black" />
-                    Memorize! Hiding in 6 seconds...
+                <div className="bg-yellow-500 text-black px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-2 shadow-2xl border border-white/20 animate-bounce">
+                    <Lightbulb size={12} fill="black animate-pulse" />
+                    Ghost Trails Active! Trace to Solve!
                 </div>
             </motion.div>
         )}
@@ -378,6 +369,7 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
             onComplete={handleComplete} 
             colors={gameColors} 
             onMove={handleMove}
+            showingSolution={showingSolution}
           />
 
           <AnimatePresence>

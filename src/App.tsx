@@ -27,7 +27,7 @@ import { auth, authReady } from './firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { AchievementService, Achievement } from './services/achievementService';
 import confetti from 'canvas-confetti';
-import { Star } from 'lucide-react';
+import { Star, Lightbulb } from 'lucide-react';
 
 type Screen = 'splash' | 'home' | 'game' | 'settings' | 'levelSelect' | 'daily' | 'login' | 'profile' | 'leaderboard' | 'achievements' | 'tournament' | 'editor';
 
@@ -48,9 +48,162 @@ const ACCENT_COLORS_MAP: Record<AccentColor, string> = {
   amber: '#D97706',
 };
 
+function mergeProgress(
+  prev: StorageData, 
+  cloudData: Partial<StorageData> | null, 
+  username?: string, 
+  avatarEmoji?: string
+): StorageData {
+  if (!cloudData) {
+    return {
+      ...prev,
+      username: username || prev.username,
+      avatarEmoji: avatarEmoji || prev.avatarEmoji
+    };
+  }
+
+  const merged = { ...prev, ...cloudData } as StorageData;
+  
+  if (username) merged.username = username;
+  if (avatarEmoji) merged.avatarEmoji = avatarEmoji;
+
+  // Custom merging of streak metrics to prevent reverting of today's visit/streak
+  const localVisit = prev.lastDailyVisit;
+  const cloudVisit = cloudData.lastDailyVisit;
+  
+  if (localVisit && cloudVisit) {
+    const dLocal = new Date(localVisit).getTime();
+    const dCloud = new Date(cloudVisit).getTime();
+    if (!isNaN(dLocal) && !isNaN(dCloud)) {
+      if (dLocal > dCloud) {
+        // Local visit date is more recent, keep local visit.
+        merged.lastDailyVisit = localVisit;
+        // Check if local is exactly 1 day after cloud
+        const isConsec = (() => {
+          const dl = new Date(localVisit);
+          const dc = new Date(cloudVisit);
+          dl.setHours(12, 0, 0, 0);
+          dc.setHours(12, 0, 0, 0);
+          return Math.round((dl.getTime() - dc.getTime()) / 86400000) === 1;
+        })();
+        if (isConsec) {
+          merged.dailyStreak = Math.max(prev.dailyStreak || 0, (cloudData.dailyStreak || 0) + 1);
+          merged.streakDays = Math.max(prev.streakDays || 0, (cloudData.streakDays || 0) + 1);
+        } else {
+          merged.dailyStreak = prev.dailyStreak || 0;
+          merged.streakDays = Math.max(prev.streakDays || 0, cloudData.streakDays || 0);
+        }
+      } else if (dCloud > dLocal) {
+        // Cloud visit date is more recent, keep cloud visit.
+        merged.lastDailyVisit = cloudVisit;
+        // Check if cloud is exactly 1 day after local
+        const isConsec = (() => {
+          const dl = new Date(localVisit);
+          const dc = new Date(cloudVisit);
+          dl.setHours(12, 0, 0, 0);
+          dc.setHours(12, 0, 0, 0);
+          return Math.round((dc.getTime() - dl.getTime()) / 86400000) === 1;
+        })();
+        if (isConsec) {
+          merged.dailyStreak = Math.max(cloudData.dailyStreak || 0, (prev.dailyStreak || 0) + 1);
+          merged.streakDays = Math.max(cloudData.streakDays || 0, (prev.streakDays || 0) + 1);
+        } else {
+          merged.dailyStreak = cloudData.dailyStreak || 0;
+          merged.streakDays = Math.max(cloudData.streakDays || 0, prev.streakDays || 0);
+        }
+      } else {
+        // Same date, take maximum of both streaks/visits
+        merged.lastDailyVisit = localVisit;
+        merged.dailyStreak = Math.max(prev.dailyStreak || 0, cloudData.dailyStreak || 0);
+        merged.streakDays = Math.max(prev.streakDays || 0, cloudData.streakDays || 0);
+      }
+    }
+  } else if (localVisit) {
+    merged.lastDailyVisit = localVisit;
+    merged.dailyStreak = prev.dailyStreak || 0;
+    merged.streakDays = prev.streakDays || 0;
+  } else if (cloudVisit) {
+    merged.lastDailyVisit = cloudVisit;
+    merged.dailyStreak = cloudData.dailyStreak || 0;
+    merged.streakDays = cloudData.streakDays || 0;
+  }
+
+  // Merge lastClaimedRewardDate to prevent losing today's claim status
+  const localClaim = prev.lastClaimedRewardDate;
+  const cloudClaim = cloudData.lastClaimedRewardDate;
+  if (localClaim && cloudClaim) {
+    const dLocalClaim = new Date(localClaim).getTime();
+    const dCloudClaim = new Date(cloudClaim).getTime();
+    if (!isNaN(dLocalClaim) && !isNaN(dCloudClaim)) {
+      merged.lastClaimedRewardDate = dLocalClaim > dCloudClaim ? localClaim : cloudClaim;
+    } else {
+      merged.lastClaimedRewardDate = localClaim || cloudClaim;
+    }
+  } else {
+    merged.lastClaimedRewardDate = localClaim || cloudClaim;
+  }
+
+  // Merge longestWinStreak to prevent staleness (incorporating the newly resolved dailyStreak)
+  merged.longestWinStreak = Math.max(
+    Number(prev.longestWinStreak) || 0, 
+    Number(cloudData.longestWinStreak) || 0, 
+    Number(merged.dailyStreak) || 0
+  );
+
+  // Ensure we don't downgrade levels, stars, bestLevel or hintsRemaining if local state is higher
+  merged.stars = Math.max(Number(prev.stars) || 0, Number(cloudData.stars) || 0);
+  merged.level = Math.max(Number(prev.level) || 1, Number(cloudData.level) || 1);
+  merged.bestLevel = Math.max(Number(prev.bestLevel) || 1, Number(cloudData.bestLevel) || 1);
+  merged.hintsRemaining = Math.max(Number(prev.hintsRemaining) || 0, Number(cloudData.hintsRemaining) || 0);
+
+  return merged;
+}
+
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), timeoutMs))
+  ]);
+};
+
 export default function App() {
   const [data, setData] = useState<StorageData>(() => GameStorage.getData());
-  const [screen, setScreen] = useState<Screen>('splash');
+  const [screen, setScreenState] = useState<Screen>('splash');
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+
+  // Custom setScreen wrapper to manage the browser/phone history stack
+  const setScreen = (targetScreen: Screen) => {
+    if (targetScreen === screen) return;
+
+    if (targetScreen !== 'splash' && targetScreen !== 'login' && targetScreen !== 'home') {
+      window.history.pushState({ screen: targetScreen }, '');
+    } else if (targetScreen === 'home') {
+      window.history.replaceState({ screen: 'home' }, '');
+    }
+    setScreenState(targetScreen);
+  };
+
+  // Synchronize phone/browser back button popped states with the app screen
+  useEffect(() => {
+    if (!initialLoadDone) return;
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state && event.state.screen) {
+        setScreenState(event.state.screen);
+      } else {
+        if (data.username) {
+          setScreenState('home');
+        } else {
+          setScreenState('login');
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [initialLoadDone, data.username]);
 
   // Helper to update state and save to transitively
   const updateData = (updater: (prev: StorageData) => StorageData) => {
@@ -58,6 +211,14 @@ export default function App() {
       const next = updater(prev);
       // Synchronous local save
       GameStorage.saveData(next);
+
+      // Immediate cloud save to guarantee settings/progress are saved instantly on change
+      if (auth.currentUser && next.username) {
+        UserService.saveProgress(next).catch(err => {
+          console.warn("Immediate cloud save failed:", err);
+        });
+      }
+
       return next;
     });
   };
@@ -91,7 +252,22 @@ export default function App() {
     // Use a small delay to avoid excessive writes during rapid state changes
     const timeout = setTimeout(performSync, 500);
     return () => clearTimeout(timeout);
-  }, [data.level, data.stars, data.username, data.dailyChallengesCompleted, data.dailyStreak, data.avatarEmoji]);
+  }, [
+    data.level,
+    data.stars,
+    data.username,
+    data.dailyChallengesCompleted,
+    data.dailyStreak,
+    data.avatarEmoji,
+    data.soundOn,
+    data.musicOn,
+    data.theme,
+    data.palette,
+    data.musicStyle,
+    data.accentColor,
+    data.volume,
+    data.hardModeOn
+  ]);
 
   useEffect(() => {
     // Initial cloud load after auth is ready
@@ -104,20 +280,21 @@ export default function App() {
         if (!active) return;
         
         if (auth.currentUser) {
-          const cloudData = await UserService.loadProgress();
+          const cloudData = await withTimeout(UserService.loadProgress(), 2000, null);
           if (cloudData && active) {
             setData(prev => {
-              const merged = { ...prev, ...cloudData };
-              // Ensure we don't downgrade levels or stars if local state is higher
-              merged.stars = Math.max(Number(prev.stars) || 0, Number(cloudData.stars) || 0);
-              merged.level = Math.max(Number(prev.level) || 1, Number(cloudData.level) || 1);
-              merged.bestLevel = Math.max(Number(prev.bestLevel) || 1, Number(cloudData.bestLevel) || 1);
-              return merged;
+              const next = mergeProgress(prev, cloudData);
+              GameStorage.saveData(next);
+              return next;
             });
           }
         }
       } catch (err) {
         console.error("Failed to dynamic sync initial cloud progress:", err);
+      } finally {
+        if (active) {
+          setInitialLoadDone(true);
+        }
       }
     };
     
@@ -142,38 +319,50 @@ export default function App() {
   const [gameLevel, setGameLevel] = useState<number | null>(null);
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
   const [dailyReward, setDailyReward] = useState<{ stars: number, hints: number } | null>(null);
+  const [hintEarnedToast, setHintEarnedToast] = useState(false);
   
   const [hasSeenTutorial, setHasSeenTutorial] = useState(() => {
     return localStorage.getItem('colorflow_tutorial') === 'true';
+  });
+  const [showTutorial, setShowTutorial] = useState(() => {
+    return localStorage.getItem('colorflow_tutorial') !== 'true';
   });
 
   const handleTutorialComplete = () => {
     localStorage.setItem('colorflow_tutorial', 'true');
     setHasSeenTutorial(true);
+    setShowTutorial(false);
   };
 
   useEffect(() => {
+    if (!initialLoadDone) return;
+
     // Daily Streak Logic
     const lastVisit = data.lastDailyVisit;
     const today = new Date().toDateString();
     
     if (lastVisit !== today) {
       updateData(prev => {
-        const isFirstVisitEver = !lastVisit;
+        const isFirstVisitEver = !prev.lastDailyVisit;
         let nextStreak = prev.dailyStreak || 0;
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toDateString();
         
-        if (lastVisit === yesterday.toDateString()) {
+        if (prev.lastDailyVisit === yesterdayStr) {
           nextStreak += 1;
         } else {
+          // If they missed playing yesterday (or 2-3 days), streak resets to 1 (new streak)
           nextStreak = 1;
         }
 
         let bonusStars = 0;
         let bonusHints = 0;
 
-        if (!isFirstVisitEver) {
+        // Prevent claiming the daily bonus multiple times a day
+        const alreadyClaimedToday = prev.lastClaimedRewardDate === today;
+
+        if (!isFirstVisitEver && !alreadyClaimedToday) {
           bonusStars = 10 + (nextStreak * 2);
           if (nextStreak % 5 === 0) bonusHints = 1;
           setDailyReward({ stars: bonusStars, hints: bonusHints });
@@ -182,16 +371,18 @@ export default function App() {
         const nextData = {
           ...prev,
           dailyStreak: nextStreak,
+          longestWinStreak: Math.max(prev.longestWinStreak || 0, nextStreak),
           streakDays: (prev.streakDays || 0) + 1,
           lastDailyVisit: today,
-          stars: prev.stars + bonusStars,
-          hintsRemaining: (prev.hintsRemaining || 0) + bonusHints
+          lastClaimedRewardDate: alreadyClaimedToday ? prev.lastClaimedRewardDate : today,
+          stars: prev.stars + (alreadyClaimedToday ? 0 : bonusStars),
+          hintsRemaining: (prev.hintsRemaining || 0) + (alreadyClaimedToday ? 0 : bonusHints)
         };
 
         return nextData;
       });
     }
-  }, [data.username]); // Added data.username to deps to ensure sync after login
+  }, [initialLoadDone, data.username, data.lastDailyVisit, data.lastClaimedRewardDate]); // Depend on initialLoadDone, username, lastDailyVisit and lastClaimedRewardDate for robust loading
 
   useEffect(() => {
     // Check for achievements
@@ -222,12 +413,8 @@ export default function App() {
     sounds.setEnabled(soundOn);
     sounds.setMusicEnabled(musicOn);
     
-    // Vibe-based logic (can be overridden by manual settings in the future)
-    if (screen === 'game' || screen === 'daily') {
-      sounds.setMusicStyle('calm');
-    } else {
-      sounds.setMusicStyle('upbeat');
-    }
+    // Respect user's selected musicStyle from settings!
+    sounds.setMusicStyle(musicStyle);
     
     sounds.setVolume(volume);
   }, [soundOn, musicOn, musicStyle, volume, screen]);
@@ -285,16 +472,42 @@ export default function App() {
         fastestTimes[activeLvl] = time;
       }
 
+      // Hint Earning System:
+      let nextHints = prev.hintsRemaining || 0;
+      let earnedHint = false;
+
+      // 1. Every 5 levels completed
+      if (isPlayingCurrent && (nextLevel - 1) % 5 === 0 && (nextLevel - 1) > 0) {
+        nextHints += 1;
+        earnedHint = true;
+      }
+
+      // 2. Every 5 new 3-star levels
+      const wasThreeStarBefore = oldStarsForLevel === 3;
+      const addedThreeStar = starsEarned === 3 && !wasThreeStarBefore;
+      const nextThreeStarCount = (prev.threeStarLevels || 0) + (addedThreeStar ? 1 : 0);
+      if (addedThreeStar && nextThreeStarCount > 0 && nextThreeStarCount % 5 === 0) {
+        nextHints += 1;
+        earnedHint = true;
+      }
+
+      if (earnedHint) {
+        setTimeout(() => {
+          setHintEarnedToast(true);
+        }, 1000);
+      }
+
       const nextData = { 
         ...prev, 
         stars: nextStars, 
+        hintsRemaining: nextHints,
         levelStars: { ...oldLevelStars, [activeLvl]: Math.max(oldStarsForLevel, starsEarned) },
         level: nextLevel, 
         bestLevel: nextBestLevel,
         totalGamesPlayed: (prev.totalGamesPlayed || 0) + 1,
         totalMoves: (prev.totalMoves || 0) + moves,
         totalTimeSeconds: (prev.totalTimeSeconds || 0) + time,
-        threeStarLevels: (prev.threeStarLevels || 0) + (starsEarned === 3 ? 1 : 0),
+        threeStarLevels: nextThreeStarCount,
         fastestLevelTimes: fastestTimes,
         themeUsage: themeUsage,
         totalPathsCreated: (prev.totalPathsCreated || 0) + 1 // Assuming 1 completion = at least 1 path session
@@ -316,12 +529,7 @@ export default function App() {
     // Check for cloud data first
     const cloudData = await UserService.loadProgress();
     
-    updateData(prev => ({ 
-      ...prev, 
-      ...(cloudData || {}),
-      username: cloudData?.username || username, 
-      avatarEmoji: cloudData?.avatarEmoji || avatarEmoji 
-    }));
+    updateData(prev => mergeProgress(prev, cloudData, username, avatarEmoji));
     
     setScreen('home');
   };
@@ -382,8 +590,16 @@ export default function App() {
           >
             <ProfileScreen 
               data={data} 
+              theme={currentTheme}
               onBack={() => setScreen('home')} 
               onLogout={handleLogout} 
+              onUpdateProfile={(username, avatarEmoji) => {
+                updateData(prev => ({
+                  ...prev,
+                  username,
+                  avatarEmoji
+                }));
+              }}
               onRefreshData={async () => {
                 const cloudData = await UserService.loadProgress();
                 if (cloudData) {
@@ -574,6 +790,7 @@ export default function App() {
               onVolumeChange={(v) => { updateData(prev => ({ ...prev, volume: v })); }}
               hardModeOn={hardModeOn}
               onToggleHardMode={() => updateData(prev => ({ ...prev, hardModeOn: !prev.hardModeOn }))}
+              onHowToPlay={() => { playClick(); setShowTutorial(true); }}
             />
           </motion.div>
         )}
@@ -590,6 +807,14 @@ export default function App() {
               userStars={data.stars}
               username={data.username || ''}
               avatarEmoji={data.avatarEmoji || '🎮'}
+              hintsRemaining={data.hintsRemaining || 0}
+              palette={data.palette}
+              onHintUsed={() => {
+                updateData(prev => ({
+                  ...prev,
+                  hintsRemaining: Math.max(0, (prev.hintsRemaining || 0) - 1)
+                }));
+              }}
               onUpdateStars={(amount) => {
                 updateData(prev => ({
                   ...prev,
@@ -702,6 +927,60 @@ export default function App() {
                <span className="text-[10px] font-black text-amber-400">+{newAchievements[0].rewardStars}</span>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hint Earned Modal Toast */}
+      <AnimatePresence>
+        {hintEarnedToast && (
+          <div key="hint-earned-popup-wrapper" className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              onClick={() => setHintEarnedToast(false)}
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-3xl p-8 text-center shadow-2xl"
+            >
+              <div className="w-24 h-24 bg-cyan-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-cyan-500/20">
+                <Lightbulb size={48} className="text-black fill-black" />
+              </div>
+              <h3 className="text-3xl font-black italic text-white mb-2 uppercase tracking-tight font-sans">HINT EARNED! 🎁</h3>
+              <p className="text-white/60 mb-8 font-medium">
+                You've completed another 5 levels or earned 5 perfect 3-star ratings! Keep flowing!
+              </p>
+              
+              <div className="flex justify-center gap-6 mb-8">
+                <div className="flex flex-col items-center bg-white/5 px-6 py-3 rounded-2xl border border-white/5">
+                   <div className="text-3xl font-black text-cyan-400">+1 HINT</div>
+                   <div className="text-[10px] uppercase font-black tracking-widest text-white/40 mt-1">Total: {data.hintsRemaining || 0} Hints</div>
+                </div>
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="w-full py-4 bg-cyan-500 text-black font-black italic rounded-2xl shadow-lg hover:bg-cyan-400 transition-colors"
+                onClick={() => setHintEarnedToast(false)}
+              >
+                AWESOME! ▶
+              </motion.button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Interactive Tutorial Overlay */}
+      <AnimatePresence>
+        {showTutorial && (
+          <TutorialOverlay 
+            onComplete={handleTutorialComplete} 
+          />
         )}
       </AnimatePresence>
     </div>

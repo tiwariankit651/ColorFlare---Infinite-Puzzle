@@ -9,7 +9,9 @@ import {
   limit, 
   serverTimestamp,
   runTransaction,
-  getDocsFromServer
+  getDocsFromServer,
+  where,
+  getCountFromServer
 } from 'firebase/firestore';
 import { auth, db, authReady } from '../firebase';
 
@@ -65,6 +67,7 @@ export interface LeaderboardEntry {
   dailyChallenges?: number;
   reactions?: Record<string, number>;
   updatedAt: any;
+  rank?: number;
 }
 
 export type LeaderboardCategory = 'stars' | 'level' | 'daily';
@@ -107,11 +110,68 @@ export const LeaderboardService = {
         const userRef = doc(db, 'users', userId);
 
         const allTimeDoc = await transaction.get(allTimeRef);
-        const existingData = allTimeDoc.exists() ? allTimeDoc.data() as LeaderboardEntry : null;
+        const existingData = allTimeDoc.exists() ? allTimeDoc.data() as LeaderboardEntry & { lastProfileUpdate?: any } : null;
 
         const existingStars = isNaN(Number(existingData?.totalStars)) ? 0 : Number(existingData?.totalStars);
         const existingLevel = isNaN(Number(existingData?.currentLevel)) ? 1 : Number(existingData?.currentLevel);
         const existingDaily = isNaN(Number(existingData?.dailyChallenges)) ? 0 : Number(existingData?.dailyChallenges);
+
+        // Anti-Cheat: Maximum stars per level is 3 (plus daily challenges, achievements, and daily login rewards)
+        const maxLevelsStars = safeInputLevel * 3;
+        const maxDailyStars = safeInputDaily * 10; // Allow generous estimate per daily challenge including possible bonus
+        const maxAchievementStars = 500; // Sum of all achievement reward stars is ~475
+        const loginRewardBuffer = 1000; // Buffer for daily login rewards claimed over time
+        const maxPossibleStars = maxLevelsStars + maxDailyStars + maxAchievementStars + loginRewardBuffer;
+
+        if (safeInputStars > maxPossibleStars) {
+          console.warn(`Anti-Cheat: Rejecting score sync because stars (${safeInputStars}) exceed max possible (${maxPossibleStars}).`);
+          return;
+        }
+
+        // Anti-Cheat: Level number can only increase by a reasonable jump (e.g., 50 levels max jump to allow bulk offline sync, or if existingLevel is 1/empty)
+        if (existingData && existingLevel > 1 && safeInputLevel > existingLevel + 50) {
+          console.warn("Anti-Cheat: Rejecting level jump.");
+          return;
+        }
+
+        // Anti-Cheat: Daily challenges completed check (allow reasonable bulk offline sync of up to 10 completed)
+        if (existingData && safeInputDaily > existingDaily + 10) {
+          console.warn("Anti-Cheat: Rejecting daily challenge jump.");
+          return;
+        }
+
+        // Anti-Cheat: Timestamp validation (minimum 1 second between score syncs to prevent instant loop hacks)
+        if (existingData && existingData.updatedAt && (safeInputLevel > existingLevel || safeInputStars > existingStars)) {
+          const lastUpdate = existingData.updatedAt.toDate ? existingData.updatedAt.toDate() : new Date(existingData.updatedAt);
+          const timeDiffSeconds = (Date.now() - lastUpdate.getTime()) / 1000;
+          if (timeDiffSeconds < 1) {
+            console.warn("Anti-Cheat: Rejecting fast level solve.");
+            return;
+          }
+        }
+
+        // Anti-Cheat: Username/avatar changes limited to once per hour
+        let finalUsername = username || existingData?.username || 'Anonymous Player';
+        let finalAvatarEmoji = avatarEmoji || existingData?.avatarEmoji || '🎮';
+        let isProfileChanging = false;
+        
+        if (existingData) {
+          const hasUsernameChanged = username && existingData.username && username !== existingData.username;
+          const hasAvatarChanged = avatarEmoji && existingData.avatarEmoji && avatarEmoji !== existingData.avatarEmoji;
+          if (hasUsernameChanged || hasAvatarChanged) {
+            isProfileChanging = true;
+            if (existingData.lastProfileUpdate) {
+              const lastProfileUpdate = existingData.lastProfileUpdate.toDate ? existingData.lastProfileUpdate.toDate() : new Date(existingData.lastProfileUpdate);
+              const hoursSinceLastUpdate = (Date.now() - lastProfileUpdate.getTime()) / (1000 * 60 * 60);
+              if (hoursSinceLastUpdate < 1) {
+                console.warn("Anti-Cheat: Username/avatar change limited to once per hour. Reverting to previous profile.");
+                finalUsername = existingData.username;
+                finalAvatarEmoji = existingData.avatarEmoji;
+                isProfileChanging = false;
+              }
+            }
+          }
+        }
 
         // ONLY update if values are actually higher OR if they are basic info (username/emoji)
         // This prevents race conditions from multiple devices downgrading scores
@@ -121,12 +181,13 @@ export const LeaderboardService = {
 
         const updatePayload = {
           userId,
-          username: username || existingData?.username || 'Anonymous Player',
-          avatarEmoji: avatarEmoji || existingData?.avatarEmoji || '🎮',
+          username: finalUsername,
+          avatarEmoji: finalAvatarEmoji,
           totalStars: finalStars,
           currentLevel: finalLevel,
           dailyChallenges: finalDaily,
-          updatedAt: serverTimestamp()
+          updatedAt: serverTimestamp(),
+          lastProfileUpdate: isProfileChanging ? serverTimestamp() : (existingData?.lastProfileUpdate || null)
         };
 
         transaction.set(allTimeRef, updatePayload, { merge: true });
@@ -234,12 +295,59 @@ export const LeaderboardService = {
     return realEntries.slice(0, limitCount);
   },
 
+  async getUserRank(category: LeaderboardCategory, timeframe: LeaderboardTimeframe, userId: string, userScore: number): Promise<number> {
+    const dailyKey = this.getDailyKey();
+    const weeklyKey = this.getWeeklyKey();
+    let collectionName = 'leaderboard';
+    if (timeframe === 'daily') collectionName = `leaderboard_daily_${dailyKey}`;
+    if (timeframe === 'weekly') collectionName = `leaderboard_weekly_${weeklyKey}`;
+
+    const fieldMap: Record<LeaderboardCategory, string> = {
+      stars: 'totalStars',
+      level: 'currentLevel',
+      daily: 'dailyChallenges'
+    };
+
+    const targetField = fieldMap[category];
+
+    try {
+      const q = query(
+        collection(db, collectionName),
+        where(targetField, '>', userScore)
+      );
+      const countSnap = await getCountFromServer(q);
+      return countSnap.data().count + 1;
+    } catch (e) {
+      console.error("Failed to calculate user rank via count:", e);
+      return 0;
+    }
+  },
+
   async submitTournamentScore(username: string, avatarEmoji: string, score: number, timeSpent: number, movesCount: number, levelsCompleted: number = 3) {
     if (authReady) await authReady;
     if (!auth.currentUser) return;
     const userId = auth.currentUser.uid;
     const weeklyKey = this.getWeeklyKey();
     const collectionName = `leaderboard_tournament_${weeklyKey}`;
+
+    // Anti-Cheat for Weekly Tournament Score
+    const maxWeeklyScore = 1750; // 7 days * 250 max daily score
+    if (score > maxWeeklyScore) {
+      console.warn("Anti-Cheat: Rejecting tournament weekly score exceeding maximum allowed points.");
+      return;
+    }
+    if (levelsCompleted > 49) { // 7 days * 7 levels
+      console.warn("Anti-Cheat: Rejecting tournament levels completed exceeding maximum allowed.");
+      return;
+    }
+    if (levelsCompleted > 0 && movesCount < levelsCompleted) {
+      console.warn("Anti-Cheat: Rejecting tournament moves fewer than levels completed.");
+      return;
+    }
+    if (levelsCompleted > 0 && timeSpent < levelsCompleted * 0.5) {
+      console.warn("Anti-Cheat: Rejecting physically impossible completion speed in tournament.");
+      return;
+    }
 
     try {
       const docRef = doc(db, collectionName, userId);
@@ -285,6 +393,25 @@ export const LeaderboardService = {
     const weeklyKey = this.getWeeklyKey();
     const collectionName = `leaderboard_tournament_${weeklyKey}`;
     const docRef = doc(db, collectionName, userId);
+
+    // Anti-Cheat for Tournament Daily Score
+    const maxDailyScore = 250; // Max points across 7 tournament levels (10+15+25+30+45+50+75)
+    if (dailyScore > maxDailyScore) {
+      console.warn("Anti-Cheat: Rejecting tournament daily score exceeding maximum allowed points.");
+      return;
+    }
+    if (dailyLevels > 7) {
+      console.warn("Anti-Cheat: Rejecting tournament daily completion exceeding 7 levels.");
+      return;
+    }
+    if (dailyLevels > 0 && dailyMoves < dailyLevels) {
+      console.warn("Anti-Cheat: Rejecting tournament run with fewer moves than levels completed.");
+      return;
+    }
+    if (dailyLevels > 0 && dailyTime < dailyLevels * 0.5) {
+      console.warn("Anti-Cheat: Rejecting physically impossible completion speed in tournament.");
+      return;
+    }
 
     try {
       await runTransaction(db, async (transaction) => {

@@ -45,20 +45,78 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ onBack }) 
       const currentUid = auth.currentUser?.uid;
       setUid(currentUid);
       
-      const data = await LeaderboardService.getLeaderboard(category, timeframe, 50);
+      const limitToFetch = 100; // Increased limit from 50 to 100 to show more records
+      const data = await LeaderboardService.getLeaderboard(category, timeframe, limitToFetch);
       
       // Secondary absolute protection against NaN values in state
-      const sanitizedData = data.map(e => ({
+      const sanitizedData = data.map((e, index) => ({
         ...e,
+        rank: index + 1,
         totalStars: isNaN(Number(e.totalStars)) ? 0 : Number(e.totalStars),
         currentLevel: isNaN(Number(e.currentLevel)) ? 1 : Number(e.currentLevel),
         dailyChallenges: isNaN(Number(e.dailyChallenges)) ? 0 : Number(e.dailyChallenges)
       }));
       
-      setEntries(sanitizedData);
+      // Let's get the user's score based on the category
+      const myStars = localStats.stars ?? 0;
+      const myLevel = localStats.level ?? 1;
+      const myChallenges = localStats.dailyChallengesCompleted ?? 0;
 
-      const userPos = sanitizedData.findIndex(e => e.userId === currentUid);
-      setUserRank(userPos !== -1 ? userPos + 1 : 0);
+      let scoreToCompare = 0;
+      if (category === 'stars') scoreToCompare = myStars;
+      else if (category === 'level') scoreToCompare = myLevel;
+      else scoreToCompare = myChallenges;
+
+      // Find user in sanitizedData
+      const userIndexInTop = sanitizedData.findIndex(e => e.userId === currentUid);
+      
+      let finalEntriesList: LeaderboardEntry[] = [...sanitizedData];
+      let finalUserRank = 0;
+
+      if (userIndexInTop !== -1) {
+        finalUserRank = userIndexInTop + 1;
+      } else if (currentUid) {
+        // Calculate exact rank count dynamically from Firestore
+        const exactRank = await LeaderboardService.getUserRank(category, timeframe, currentUid, scoreToCompare);
+        finalUserRank = exactRank;
+
+        // Populate user global details if available
+        let profileUsername = auth.currentUser?.displayName || localStats.username || 'Anonymous Player';
+        let profileEmoji = localStats.avatarEmoji || '🎮';
+
+        let collectionName = 'leaderboard';
+        if (timeframe === 'daily') collectionName = `leaderboard_daily_${LeaderboardService.getDailyKey()}`;
+        if (timeframe === 'weekly') collectionName = `leaderboard_weekly_${LeaderboardService.getWeeklyKey()}`;
+
+        try {
+          const userDoc = await getDoc(doc(db, collectionName, currentUid));
+          if (userDoc.exists()) {
+            const raw = userDoc.data();
+            profileUsername = raw.username || profileUsername;
+            profileEmoji = raw.avatarEmoji || profileEmoji;
+          }
+        } catch (e) {
+          console.warn("Couldn't read profile path for manual entry:", e);
+        }
+
+        const userManualEntry: LeaderboardEntry = {
+          userId: currentUid,
+          username: profileUsername,
+          avatarEmoji: profileEmoji,
+          totalStars: myStars,
+          currentLevel: myLevel,
+          dailyChallenges: myChallenges,
+          rank: exactRank,
+          reactions: {},
+          updatedAt: null
+        };
+
+        // Append to the list so that the user is guaranteed to be rendered!
+        finalEntriesList.push(userManualEntry);
+      }
+
+      setEntries(finalEntriesList);
+      setUserRank(finalUserRank);
 
       if (currentUid) {
           let collectionName = 'leaderboard';
@@ -357,88 +415,95 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ onBack }) 
                     )}
                   </div>
                 )}
-
                 {/* List of other players */}
                 <div className="space-y-2 mt-8">
                   {remaining.map((entry, index) => {
-                    const actualRank = index + 4;
+                    const actualRank = entry.rank || (index + 4);
                     const val = displayValue(entry);
                     const isCurrentUser = entry.userId === uid;
                     const tier = getRankBadgeAndColor(actualRank);
+                    const showGap = index > 0 && entry.rank && remaining[index - 1].rank && (entry.rank - (remaining[index - 1].rank || 0) > 1);
 
                     return (
-                      <motion.div
-                        key={entry.userId}
-                        initial={{ y: 10, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        onClick={() => setSelectedPlayer(entry)}
-                        transition={{ delay: 0.05 + index * 0.02 }}
-                        className={`
-                          flex items-center gap-4 p-4 rounded-[2rem] border transition-all relative overflow-hidden group cursor-pointer
-                          ${isCurrentUser 
-                            ? 'bg-yellow-500/10 border-yellow-500/50 shadow-[0_0_25px_rgba(234,179,8,0.08)]' 
-                            : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10'}
-                        `}
-                      >
-                        {isCurrentUser && (
-                           <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 animate-shimmer pointer-events-none" />
+                      <React.Fragment key={entry.userId}>
+                        {showGap && (
+                          <div className="flex items-center justify-center py-4 my-2 text-white/25 font-black text-[9px] tracking-[0.2em] uppercase italic bg-white/[0.02] border border-dashed border-white/10 rounded-2xl">
+                            •••••• ranking continues underneath ••••••
+                          </div>
                         )}
-                        <div className={`w-8 text-center font-black italic text-sm ${isCurrentUser ? 'text-yellow-500' : 'text-white/20'}`}>
-                          {actualRank}
-                        </div>
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105 ${isCurrentUser ? 'bg-yellow-500 text-black shadow-lg scale-105' : 'bg-white/10 text-2xl'}`}>
-                          <span className={isCurrentUser ? 'text-2xl' : ''}>{entry.avatarEmoji}</span>
-                        </div>
-                        <div className="flex-1 min-w-0 px-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <p className={`font-black italic uppercase tracking-wider text-sm truncate ${isCurrentUser ? 'text-yellow-500 font-extrabold' : ''}`}>
-                              {entry.username}
-                            </p>
-                            {isCurrentUser && (
-                              <span className="bg-yellow-500 text-black text-[7px] px-1.5 py-0.5 rounded-full font-black tracking-tight uppercase">YOU</span>
-                            )}
+                        <motion.div
+                          key={entry.userId}
+                          initial={{ y: 10, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          onClick={() => setSelectedPlayer(entry)}
+                          transition={{ delay: 0.05 + Math.min(index, 20) * 0.02 }}
+                          className={`
+                            flex items-center gap-4 p-4 rounded-[2rem] border transition-all relative overflow-hidden group cursor-pointer
+                            ${isCurrentUser 
+                              ? 'bg-yellow-500/10 border-yellow-500/50 shadow-[0_0_25px_rgba(234,179,8,0.08)]' 
+                              : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10'}
+                          `}
+                        >
+                          {isCurrentUser && (
+                             <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 animate-shimmer pointer-events-none" />
+                          )}
+                          <div className={`w-8 text-center font-black italic text-sm ${isCurrentUser ? 'text-yellow-500' : 'text-white/20'}`}>
+                            #{actualRank}
                           </div>
-                          
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px] text-white/40 font-bold uppercase tracking-wider">
-                              LVL {entry.currentLevel} • {entry.totalStars} ⭐ {category === 'daily' && `• ${entry.dailyChallenges || 0} 🔥`}
-                            </span>
-                            <span className={`text-[7px] px-1.5 py-0.2 rounded border font-semibold scale-95 font-mono ${tier.color}`}>
-                              {tier.title.split(' ')[0]}
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105 ${isCurrentUser ? 'bg-yellow-500 text-black shadow-lg scale-105' : 'bg-white/10 text-2xl'}`}>
+                            <span className={isCurrentUser ? 'text-2xl' : ''}>{entry.avatarEmoji}</span>
+                          </div>
+                          <div className="flex-1 min-w-0 px-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className={`font-black italic uppercase tracking-wider text-sm truncate ${isCurrentUser ? 'text-yellow-500 font-extrabold' : ''}`}>
+                                {entry.username}
+                              </p>
+                              {isCurrentUser && (
+                                <span className="bg-yellow-500 text-black text-[7px] px-1.5 py-0.5 rounded-full font-black tracking-tight uppercase">YOU</span>
+                              )}
+                            </div>
+                            
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[9px] text-white/40 font-bold uppercase tracking-wider">
+                                LVL {entry.currentLevel} • {entry.totalStars} ⭐ {category === 'daily' && `• ${entry.dailyChallenges || 0} 🔥`}
+                              </span>
+                              <span className={`text-[7px] px-1.5 py-0.2 rounded border font-semibold scale-95 font-mono ${tier.color}`}>
+                                {tier.title.split(' ')[0]}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right flex flex-col items-end pr-2">
+                            <span className={`font-black italic text-lg ${isCurrentUser ? 'text-yellow-500' : ''}`}>{val}</span>
+                            <span className="text-[7px] font-black uppercase text-white/20 tracking-wider">
+                              {category === 'stars' ? 'STARS' : category === 'level' ? 'MAX LVL' : 'CHALLENGES'}
                             </span>
                           </div>
-                        </div>
-                        <div className="text-right flex flex-col items-end pr-2">
-                          <span className={`font-black italic text-lg ${isCurrentUser ? 'text-yellow-500' : ''}`}>{val}</span>
-                          <span className="text-[7px] font-black uppercase text-white/20 tracking-wider">
-                            {category === 'stars' ? 'STARS' : category === 'level' ? 'MAX LVL' : 'CHALLENGES'}
-                          </span>
-                        </div>
 
-                        {/* Reactions Overlay */}
-                        <div className="absolute top-0 right-0 h-full flex items-center pr-2 translate-x-full group-hover:translate-x-0 transition-transform bg-gradient-to-l from-[#07130f] to-transparent pl-8">
-                           {['👏', '🔥', '🏆', '✨'].map(emoji => (
-                             <motion.button
-                               key={emoji}
-                               whileHover={{ scale: 1.2 }}
-                               whileTap={{ scale: 0.9 }}
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 LeaderboardService.addReaction(entry.userId, emoji, timeframe);
-                                 // Instantly trigger reactive sound
-                               }}
-                               className="p-1.5 hover:bg-white/10 rounded-lg text-lg grayscale hover:grayscale-0 transition-all relative"
-                             >
-                               {emoji}
-                               {entry.reactions?.[emoji] && (
-                                 <span className="absolute -top-1 -right-1 bg-yellow-500 text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-black scale-90">
-                                   {entry.reactions[emoji]}
-                                 </span>
-                               )}
-                             </motion.button>
-                           ))}
-                        </div>
-                      </motion.div>
+                          {/* Reactions Overlay */}
+                          <div className="absolute top-0 right-0 h-full flex items-center pr-2 translate-x-full group-hover:translate-x-0 transition-transform bg-gradient-to-l from-[#07130f] to-transparent pl-8">
+                             {['👏', '🔥', '🏆', '✨'].map(emoji => (
+                               <motion.button
+                                 key={emoji}
+                                 whileHover={{ scale: 1.2 }}
+                                 whileTap={{ scale: 0.9 }}
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   LeaderboardService.addReaction(entry.userId, emoji, timeframe);
+                                   // Instantly trigger reactive sound
+                                 }}
+                                 className="p-1.5 hover:bg-white/10 rounded-lg text-lg grayscale hover:grayscale-0 transition-all relative"
+                               >
+                                 {emoji}
+                                 {entry.reactions?.[emoji] && (
+                                   <span className="absolute -top-1 -right-1 bg-yellow-500 text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-black scale-90">
+                                     {entry.reactions[emoji]}
+                                   </span>
+                                 )}
+                               </motion.button>
+                             ))}
+                          </div>
+                        </motion.div>
+                      </React.Fragment>
                     );
                   })}
                 </div>

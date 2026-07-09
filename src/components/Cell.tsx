@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { RotateCcw, Zap, Box } from 'lucide-react';
+import { RotateCcw, Zap, Box, Key, Lock } from 'lucide-react';
 import { Cell, CellType } from '../types';
 
 interface CellProps {
@@ -9,11 +9,21 @@ interface CellProps {
   isActive: boolean;
   isHint?: boolean;
   isTutorial?: boolean;
+  hintColor?: string; // Color of the path index when showing solution
 }
 
-export const CellComponent: React.FC<CellProps> = ({ cell, color, isActive, isHint, isTutorial }) => {
+export const CellComponent: React.FC<CellProps> = ({ 
+  cell, 
+  color, 
+  isActive, 
+  isHint, 
+  isTutorial,
+  hintColor 
+}) => {
   const getBgColor = () => {
     if (cell.type === CellType.WALL) return 'rgb(31, 41, 55)'; // gray-800
+    if (cell.type === CellType.GATE) return 'rgba(239, 68, 68, 0.05)';
+    if (cell.type === CellType.KEY) return 'rgba(245, 158, 11, 0.05)';
     if (cell.isPath && color) {
         return `${color}59`; 
     }
@@ -54,6 +64,33 @@ export const CellComponent: React.FC<CellProps> = ({ cell, color, isActive, isHi
             <Zap className="text-indigo-400 opacity-40 animate-pulse" size="100%" fill="currentColor" />
           </div>
         );
+      case CellType.KEY:
+        const kColor = color || '#facc15';
+        return (
+          <div className="flex items-center justify-center w-full h-full p-2">
+            <Key className="text-white/85" style={{ color: kColor, filter: `drop-shadow(0 0 6px ${kColor}aa)` }} size="60%" />
+          </div>
+        );
+      case CellType.GATE:
+        const gColor = color || '#cf3c3c';
+        return (
+          <div className="flex items-center justify-center w-full h-full p-1.5">
+            <div 
+              className="w-full h-full rounded border border-white/25 bg-black/40 flex items-center justify-center"
+              style={{ borderColor: `${gColor}55` }}
+            >
+              <Lock className="text-white/55" style={{ color: gColor }} size="55%" />
+            </div>
+          </div>
+        );
+      case CellType.BRIDGE:
+        return (
+          <div className="flex items-center justify-center w-full h-full relative opacity-40">
+            <div className="absolute left-0 right-0 h-1 bg-white/10 rounded-full" />
+            <div className="absolute top-0 bottom-0 w-1 bg-white/10 rounded-full" />
+            <div className="absolute w-2 h-2 rounded-full border border-white/20 bg-black/50" />
+          </div>
+        );
       default:
         return null;
     }
@@ -69,6 +106,26 @@ export const CellComponent: React.FC<CellProps> = ({ cell, color, isActive, isHi
         backgroundColor: getBgColor()
       }}
     >
+      {/* Solution Hint Pulsating Tube Indicator */}
+      {hintColor && !cell.isPath && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ 
+            opacity: [0.3, 0.65, 0.3],
+            scale: [0.8, 1.05, 0.8]
+          }}
+          transition={{ 
+            duration: 1.5, 
+            repeat: Infinity, 
+            ease: "easeInOut" 
+          }}
+          className="absolute inset-0 z-50 m-[30%] rounded-full border-2 border-dashed shadow-[0_0_8px_currentColor] pointer-events-none"
+          style={{ 
+            color: hintColor,
+          }}
+        />
+      )}
+
       {isHint && (
         <motion.div 
           initial={{ scale: 0, opacity: 0 }}

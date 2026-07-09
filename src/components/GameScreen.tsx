@@ -28,7 +28,11 @@ const DEFAULT_COLORS = [
   '#8B5CF6', // violet-500
   '#06B6D4', // cyan-500
   '#EC4899', // pink-500
-  '#71717A', // zinc-500
+  '#F97316', // orange-500
+  '#84CC16', // lime-500
+  '#A855F7', // purple-500
+  '#14B8A6', // teal-500
+  '#F43F5E', // neon rose (was zinc-500 #71717A)
 ];
 
 const PERFECT_MSGS = ['💯 Perfect!', '✨ Brilliant!', '🌟 Superb!', '🚀 Awesome!'];
@@ -59,6 +63,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
 
   const [grid, setGrid] = useState<any[][] | null>(null);
   const [history, setHistory] = useState<any[][][]>([]);
+  const [moveHistory, setMoveHistory] = useState<number[]>([]);
   const [winningHistory, setWinningHistory] = useState<any[][][]>([]);
   const [isReviewing, setIsReviewing] = useState(false);
   const [reviewStep, setReviewStep] = useState(0);
@@ -68,7 +73,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
   const [shouldShake, setShouldShake] = useState(false);
   const [confettiActive, setConfettiActive] = useState(false);
   const [isWatchingAd, setIsWatchingAd] = useState(false);
-  const [adReason, setAdReason] = useState<'hint' | 'skip'>('hint');
+  const [adReason, setAdReason] = useState<'hint'>('hint');
   const [hintPath, setHintPath] = useState<{ r: number, c: number }[] | undefined>();
   const [moveCount, setMoveCount] = useState(0);
   const [lastMovedColor, setLastMovedColor] = useState<number | null>(null);
@@ -81,6 +86,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
   const [lastHintTime, setLastHintTime] = useState(0);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [failReason, setFailReason] = useState<'moves' | 'time' | null>(null);
 
   const [hasUsedHintOnce, setHasUsedHintOnce] = useState(false);
   const hintTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -95,7 +102,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     // Generate a stable seed for this level to ensure consistency across users and sessions
     const levelSeed = (currentLevel * 15485863) % 2147483647;
     const levelGenerator = new LevelGenerator(levelSeed);
-    let newLevel = levelGenerator.generate(currentLevel);
+    let newLevel = levelGenerator.generate(currentLevel, hardModeOn);
     
     if (hardModeOn) {
       newLevel = levelGenerator.applyHardMode(newLevel);
@@ -104,6 +111,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     setLevel(newLevel);
     setGrid(newLevel.grid);
     setHistory([]);
+    setMoveHistory([]);
     setHintPath(undefined);
     setMoveCount(0);
     setHintsUsed(0);
@@ -112,10 +120,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     setCooldownRemaining(0);
     setHintUsageCount(0);
     setHasUsedHintOnce(false);
+    setFailReason(null);
+    if (hardModeOn && newLevel.timeLimit) {
+      setTimeLeft(newLevel.timeLimit);
+    } else {
+      setTimeLeft(null);
+    }
+    if (currentLevel === 1 && !localStorage.getItem('colorflow_tutorial')) {
+      setShowTutorial(true);
+    }
     return () => {
       if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
     };
-  }, [currentLevel]);
+  }, [currentLevel, hardModeOn]);
 
   useEffect(() => {
     if (cooldownRemaining > 0) {
@@ -125,6 +142,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
       return () => clearInterval(timer);
     }
   }, [cooldownRemaining]);
+
+  useEffect(() => {
+    if (!hardModeOn || timeLeft === null || showComplete || failReason) return;
+    if (timeLeft <= 0) {
+      setFailReason('time');
+      triggerShake();
+      setTimeout(() => {
+        resetLevel();
+      }, 1500);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setTimeLeft(prev => (prev !== null ? prev - 1 : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [timeLeft, hardModeOn, showComplete, failReason]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -142,27 +175,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     if (isWatchingAd && adTimeElapsed >= AD_DURATION_MS) {
       setIsWatchingAd(false);
       setAdTimeElapsed(0);
-      if (adReason === 'hint') {
-        triggerHintLogic();
-      } else {
-        skipLevel();
-      }
+      triggerHintLogic();
     }
-  }, [isWatchingAd, adTimeElapsed, AD_DURATION_MS, adReason]);
+  }, [isWatchingAd, adTimeElapsed, AD_DURATION_MS]);
 
   const handleUndo = () => {
-    if (history.length === 0) return;
+    if (history.length === 0 || moveHistory.length === 0) return;
     const newHistory = [...history];
     const lastGrid = newHistory.pop();
     setGrid(lastGrid!);
     setHistory(newHistory);
-    setMoveCount(prev => Math.max(0, prev - 1));
-    sounds.playClick();
-  };
 
-  const skipLevel = () => {
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    onComplete({ stars: 1, moves: moveCount, time: isNaN(elapsed) ? 0 : elapsed }); // skip gives 1 star
+    const newMoveHistory = [...moveHistory];
+    const prevMoveCount = newMoveHistory.pop();
+    if (prevMoveCount !== undefined) {
+      setMoveCount(prevMoveCount);
+    }
+    setMoveHistory(newMoveHistory);
+    sounds.playClick();
   };
 
   useEffect(() => {
@@ -183,12 +213,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     }
   }, [isReviewing, winningHistory]);
 
-  const handleComplete = () => {
+  const handleComplete = (finalGrid?: any[][]) => {
     const duration = Math.floor((Date.now() - startTime) / 1000);
     setCompletionTime(duration);
 
     // Save history for replay
-    setWinningHistory([...history, grid!]);
+    const resolvedFinalGrid = finalGrid || grid!;
+    setWinningHistory([...history, resolvedFinalGrid]);
 
     // Save global stats
     const totalCells = level?.gridSize ? level.gridSize * level.gridSize : 25;
@@ -200,11 +231,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     }));
     if (playableCells === 0) playableCells = totalCells;
 
-    // More generous star calculation
-    // 3 stars: <= 1.5x cells (allows for some corrections)
-    // 2 stars: <= 3x cells
-    // 1 star: more than 3x cells
-    const earned = moveCount <= playableCells * 1.5 ? 3 : moveCount <= playableCells * 3 ? 2 : 1;
+    // Advanced cell-transition based star scoring calculation
+    const colorCount = level?.colorCount || 5;
+    const gridSize = level?.gridSize || 5;
+
+    // Calculate exact minimum moves (cell-transitions) required for a perfect connection
+    let perfectMoves = 0;
+    if (level?.solutionPaths && level.solutionPaths.length > 0) {
+      perfectMoves = level.solutionPaths.reduce((acc, path) => acc + Math.max(0, path.length - 1), 0);
+    } else {
+      perfectMoves = Math.max(colorCount * 2, playableCells - colorCount);
+    }
+
+    // Advanced adaptive grace thresholds that perfectly support step-by-step moves
+    const threeStarThreshold = perfectMoves + Math.max(8, Math.floor(perfectMoves * 0.45));
+    const twoStarThreshold = perfectMoves + Math.max(20, Math.floor(perfectMoves * 0.95));
+
+    const earned = moveCount <= threeStarThreshold ? 3 : moveCount <= twoStarThreshold ? 2 : 1;
     setStarsEarned(earned);
 
     // Pick celebration message based on performance
@@ -255,6 +298,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
       }
       setGrid(level.grid);
       setHistory([]);
+      setMoveHistory([]);
       setHintPath(undefined);
       setMoveCount(0);
       setHintsUsed(0);
@@ -262,6 +306,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
       setShowingSolution(false);
       setConfettiActive(false);
       setPreHintGrid(null);
+      setFailReason(null);
+      if (hardModeOn && level.timeLimit) {
+        setTimeLeft(level.timeLimit);
+      } else {
+        setTimeLeft(null);
+      }
     }
   };
 
@@ -277,58 +327,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     }
   };
 
-  const triggerSkip = () => {
-    setAdReason('skip');
-    setIsWatchingAd(true);
-    setAdTimeElapsed(0);
-  };
-
   const triggerHintLogic = () => {
     if (!level?.solutionPaths || !grid || level.solutionPaths.length === 0) {
       console.error("Missing level data for hint");
       return;
     }
 
-    // Capture current grid to restore later
-    const capturedGrid = grid.map(row => row.map(cell => ({ ...cell })));
-    setPreHintGrid(capturedGrid);
-    
-    // Create solution grid - CLEAN VERSION: Start with dots and walls only to avoid mess
-    const solutionGrid = level.grid.map(row => row.map(cell => ({ 
-        ...cell, 
-        isPath: false, 
-        pathColorIndex: undefined 
-    })));
-    
-    level.solutionPaths.forEach((path, colorIdx) => {
-        path.forEach(p => {
-            const cell = solutionGrid[p.r][p.c];
-            if (cell.type !== 'dot') {
-                cell.isPath = true;
-                cell.pathColorIndex = colorIdx;
-            }
-        });
-    });
-
-    setGrid(solutionGrid);
     setShowingSolution(true);
     setLastHintTime(Date.now());
     setHintsUsed(prev => prev + 1);
     
-    // Determine hint duration: 10s for first, 5s thereafter
-    const displayDuration = hintUsageCount === 0 ? 10000 : 5000;
+    // Hint guideline trails remain active for 12 seconds so they have plenty of time to trace them
+    const displayDuration = 12000;
     setHintUsageCount(prev => prev + 1);
 
     onHintUsed?.();
     setCooldownRemaining(HINT_COOLDOWN_MS);
     setHasUsedHintOnce(false);
 
-    // Hide solution after the calculated duration
     if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
     hintTimeoutRef.current = setTimeout(() => {
-        setGrid(capturedGrid);
         setShowingSolution(false);
-        setPreHintGrid(null);
         hintTimeoutRef.current = null;
     }, displayDuration);
   };
@@ -475,10 +494,49 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     </header>
 
       <main className="flex-1 flex flex-col items-center justify-center p-4 max-w-lg mx-auto w-full">
-        <div className="mb-6 text-white/20 text-[10px] font-black uppercase tracking-[0.5em] flex items-center justify-center gap-4 w-full">
-          <span>{level.colorCount} COLORS</span>
-          <span className="text-white/10">•</span>
-          <span>{level.gridSize}x{level.gridSize} GRID</span>
+        <div className="mb-5 text-center">
+          <div className="text-white/20 text-[10px] font-black uppercase tracking-[0.25em] flex items-center justify-center gap-4 w-full">
+            <span>{level.colorCount} COLORS</span>
+            <span className="text-white/10">•</span>
+            <span>{level.gridSize}x{level.gridSize} GRID</span>
+          </div>
+          {hardModeOn && level.isHardMode && (
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="flex items-center justify-center gap-6 mt-3 bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-2xl max-w-xs mx-auto"
+            >
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] font-black uppercase tracking-widest text-red-400/80">Moves Left</span>
+                <span className={`text-lg font-black tracking-tight ${level.maxMoves && (level.maxMoves - moveCount <= 2) ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                  {level.maxMoves ? Math.max(0, level.maxMoves - moveCount) : '∞'}
+                </span>
+              </div>
+              <div className="h-6 w-[1px] bg-white/10" />
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] font-black uppercase tracking-widest text-red-400/80">Time Limit</span>
+                <span className={`text-lg font-black tracking-tight ${timeLeft !== null && timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                  {timeLeft !== null ? `${timeLeft}s` : '∞'}
+                </span>
+              </div>
+            </motion.div>
+          )}
+          {level.strategyName && (
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="mt-2.5 bg-purple-500/10 border border-purple-500/20 px-3.5 py-1.5 rounded-full inline-flex flex-col items-center max-w-xs"
+            >
+              <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">
+                🧩 setup: {level.strategyName}
+              </span>
+              {level.strategyDesc && (
+                <span className="text-[8.5px] text-slate-400 font-medium tracking-tight text-center leading-normal mt-0.5">
+                  {level.strategyDesc}
+                </span>
+              )}
+            </motion.div>
+          )}
         </div>
 
 
@@ -519,9 +577,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
               animate={{ opacity: 1, y: 0 }}
               className="absolute -top-12 left-0 right-0 z-50 text-center"
             >
-              <div className="bg-yellow-500 text-black px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-2 shadow-xl">
-                <Lightbulb size={12} fill="black" />
-                Memorize! Hiding in a few seconds...
+              <div className="bg-yellow-505 bg-yellow-500 text-black px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-2 shadow-2xl border border-white/20 animate-bounce">
+                <Lightbulb size={12} fill="black animate-pulse" />
+                Ghost Trails Active! Trace to Solve!
               </div>
             </motion.div>
           )}
@@ -538,16 +596,26 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
               onComplete={handleComplete} 
               onError={triggerShake}
               colors={gameColors} 
+              showingSolution={showingSolution}
               hintPath={hintPath || (currentLevel <= 2 && moveCount < 5 ? level.solutionPaths?.[0] : undefined)}
-              onMove={(prevGrid, colorIdx) => {
-                if (isReviewing || showingSolution) return;
+              onMove={(prevGrid, colorIdx, isStartStroke) => {
+                if (isReviewing || failReason) return;
                 setHistory(prev => [...prev.slice(-19), prevGrid]); // Keep last 20 moves
-                setMoveCount(prev => prev + 1);
+                setMoveHistory(prev => [...prev.slice(-19), moveCount]); // Track moveCount transitions for clean Undos
+                const nextMoveCount = moveCount + 1;
+                setMoveCount(nextMoveCount);
                 setLastMovedColor(colorIdx);
                 sounds.playCombo(Math.min(12, Math.floor(moveCount / 5)));
+                
+                if (hardModeOn && level?.maxMoves && nextMoveCount > level.maxMoves) {
+                  setFailReason('moves');
+                  triggerShake();
+                  setTimeout(() => {
+                    resetLevel();
+                  }, 1500);
+                }
               }}
               moveCount={moveCount}
-              showingSolution={showingSolution}
             />
 
             {/* Confetti Celebration Overlay */}
@@ -608,8 +676,26 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
                 onClick={() => {
                   setIsReviewing(false);
                   const totalCells = level?.gridSize ? level.gridSize * level.gridSize : 25;
-                  const starsEarned = moveCount <= totalCells * 1.2 ? 3 : moveCount <= totalCells * 1.8 ? 2 : 1;
-                  onComplete({ stars: starsEarned, moves: moveCount, time: completionTime || 0 });
+                  
+                  let playableCells = 0;
+                  level?.grid.forEach(row => row.forEach(cell => {
+                    if (cell.type !== 'wall') playableCells++;
+                  }));
+                  if (playableCells === 0) playableCells = totalCells;
+
+                  const colorCount = level?.colorCount || 5;
+                  let perfectMoves = 0;
+                  if (level?.solutionPaths && level.solutionPaths.length > 0) {
+                    perfectMoves = level.solutionPaths.reduce((acc, path) => acc + Math.max(0, path.length - 1), 0);
+                  } else {
+                    perfectMoves = Math.max(colorCount * 2, playableCells - colorCount);
+                  }
+
+                  const threeStarThreshold = perfectMoves + Math.max(8, Math.floor(perfectMoves * 0.45));
+                  const twoStarThreshold = perfectMoves + Math.max(20, Math.floor(perfectMoves * 0.95));
+                  const finalStars = moveCount <= threeStarThreshold ? 3 : moveCount <= twoStarThreshold ? 2 : 1;
+                  
+                  onComplete({ stars: finalStars, moves: moveCount, time: completionTime || 0 });
                 }}
                 className="bg-white text-black px-6 py-2 rounded-xl font-black italic text-xs tracking-tighter"
               >
@@ -718,6 +804,26 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
                 </motion.div>
               </>
             )}
+            {failReason && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 flex items-center justify-center z-50 bg-black/90 backdrop-blur-sm rounded-3xl"
+              >
+                <div className="text-center p-8 bg-red-600/10 border-2 border-red-500 rounded-3xl max-w-xs mx-auto shadow-2xl">
+                  <h3 className="text-2xl font-black italic text-red-500 mb-2 uppercase tracking-tight">
+                    {failReason === 'moves' ? 'OUT OF MOVES!' : 'TIME UP!'}
+                  </h3>
+                  <p className="text-xs text-white/60 uppercase tracking-widest font-black leading-tight">
+                    Hard Mode is tough!
+                  </p>
+                  <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-black mt-2">
+                    Auto-resetting...
+                  </p>
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
 
@@ -733,7 +839,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
       <footer className="h-16 flex items-center justify-center bg-black/40 border-t border-white/5">
         <p className="text-[10px] text-white/20 font-bold tracking-[0.3em] uppercase">Never Stop Flowing</p>
       </footer>
-      {showTutorial && <TutorialOverlay onComplete={() => setShowTutorial(false)} />}
+      {showTutorial && (
+        <TutorialOverlay 
+          onComplete={() => {
+            setShowTutorial(false);
+            localStorage.setItem('colorflow_tutorial', 'true');
+          }} 
+        />
+      )}
 
       <AnimatePresence>
         {isWatchingAd && (
@@ -749,7 +862,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
               className="w-full max-w-xs bg-[#2a2a2a] rounded-[32px] p-8 flex flex-col items-center shadow-2xl border border-white/10"
             >
               <h3 className="text-white text-xl font-black italic mb-8 tracking-tight">
-                {adReason === 'hint' ? '🎁 Hint Unlocking...' : '⏭ Skipping Level...'}
+                🎁 Hint Unlocking...
               </h3>
               
               <div className="relative w-32 h-32 mb-8">
@@ -779,23 +892,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
                   <span className="text-4xl font-black italic">{Math.ceil((AD_DURATION_MS - adTimeElapsed) / 1000)}</span>
                 </div>
               </div>
-
-              {adTimeElapsed >= SKIP_AVAILABLE_MS && (hintUsageCount === 0 || adReason === 'skip') ? (
+              
+              {adTimeElapsed >= SKIP_AVAILABLE_MS ? (
                 <button 
                   onClick={() => {
                     setIsWatchingAd(false);
-                    if (adReason === 'hint') triggerHintLogic();
-                    else skipLevel();
+                    triggerHintLogic();
                   }}
                   className="bg-yellow-500 text-black px-8 py-3 rounded-2xl font-black italic tracking-widest hover:scale-105 active:scale-95 transition-transform"
                 >
-                  SKIP ▶
+                  GET HINT ▶
                 </button>
               ) : (
                 <p className="text-white/40 text-xs font-bold uppercase tracking-widest">
-                  {adReason === 'hint' && hintUsageCount > 0 
-                    ? `Wait ${Math.ceil((AD_DURATION_MS - adTimeElapsed) / 1000)}s`
-                    : `Skip in ${Math.ceil((SKIP_AVAILABLE_MS - adTimeElapsed) / 1000)}s`}
+                  Unlock in {Math.ceil((SKIP_AVAILABLE_MS - adTimeElapsed) / 1000)}s
                 </p>
               )}
             </motion.div>

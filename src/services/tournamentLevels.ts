@@ -1,4 +1,5 @@
 import { Level, Cell, CellType } from '../types';
+import { LevelGenerator } from '../logic/levelGenerator';
 
 export interface BaseTemplate {
   size: number;
@@ -178,54 +179,48 @@ export function transformCoordinate(row: number, col: number, size: number, dayI
   return { r, c };
 }
 
+/**
+ * Generates 7 daily tournament levels: 2 Easy, 2 Medium, 3 Hard.
+ * Employs LevelGenerator with day-based seeding to guarantee the levels are:
+ * 1. Exactly the same for all players on a given day.
+ * 2. 100% solvable with precise mathematical solutions.
+ * 3. Filled with the exciting interactive concepts like bridges, teleporters, dividers, key-gates, etc.
+ */
 export function getDailyTournamentLevels(dayIndex: number): Level[] {
-  return BASE_TEMPLATES.map((template, idx) => {
-    const size = template.size;
-    const colorsCount = template.colorCount;
-    const levelNumber = 9000 + (dayIndex * 10) + idx;
+  const levels: Level[] = [];
+  
+  // Setups for tournament progression:
+  // idx 0-1: Easy (effective levels around 6-10 -> 5x5 grid)
+  // idx 2-3: Medium (effective levels around 16-20 -> 6x6 grid)
+  // idx 4-6: Hard (effective levels around 31-40 -> 7x7 grid)
+  const configs = [
+    { levelNum: 8, isHard: false },  // Easy
+    { levelNum: 10, isHard: false }, // Easy
+    { levelNum: 18, isHard: false }, // Medium
+    { levelNum: 22, isHard: false }, // Medium
+    { levelNum: 35, isHard: true },  // Hard
+    { levelNum: 40, isHard: true },  // Hard
+    { levelNum: 45, isHard: true }   // Hard
+  ];
 
-    // Initialize clean grid
-    const grid: Cell[][] = Array.from({ length: size }, (_, r) =>
-      Array.from({ length: size }, (_, c) => ({
-        row: r,
-        col: c,
-        type: CellType.EMPTY,
-        isPath: false
-      }))
-    );
-
-    // Place and transform walls
-    if (template.walls) {
-      template.walls.forEach(wall => {
-        const { r: tr, c: tc } = transformCoordinate(wall.r, wall.c, size, dayIndex);
-        grid[tr][tc] = {
-          row: tr,
-          col: tc,
-          type: CellType.WALL,
-          isPath: false
-        };
-      });
+  for (let idx = 0; idx < 7; idx++) {
+    const cfg = configs[idx];
+    // Deterministic daily seeds to keep it identical for all tournament candidates on a given day
+    const uniqueSeed = (dayIndex * 317 + idx * 79 + 53) % 10000;
+    const generator = new LevelGenerator(uniqueSeed);
+    
+    let lvl = generator.generate(cfg.levelNum);
+    
+    // For hard levels, apply hard mode overlays like teleporter linkages and rotator swaps
+    if (cfg.isHard) {
+      lvl = generator.applyHardMode(lvl);
     }
-
-    // Place and transform dots
-    template.dots.forEach(dot => {
-      const { r: tr, c: tc } = transformCoordinate(dot.r, dot.c, size, dayIndex);
-      // Permute color indices to change visual tones daily
-      const finalColorIndex = (dot.colorIndex + dayIndex) % colorsCount;
-      grid[tr][tc] = {
-        row: tr,
-        col: tc,
-        type: CellType.DOT,
-        colorIndex: finalColorIndex,
-        isPath: false
-      };
-    });
-
-    return {
-      number: levelNumber,
-      gridSize: size,
-      grid: grid,
-      colorCount: colorsCount
-    };
-  });
+    
+    // Attach stable, consecutive level identifier
+    lvl.number = 9000 + (dayIndex * 10) + idx;
+    
+    levels.push(lvl);
+  }
+  
+  return levels;
 }

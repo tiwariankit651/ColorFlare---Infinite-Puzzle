@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { ThemeName, MusicStyle, AccentColor } from '../types';
-import { ChevronLeft, Volume2, VolumeX, Music, Music2, Share2, Star, Wind, Zap, Moon, Leaf, Cloud, Activity, Sun, Palette, Sparkles, Layers } from 'lucide-react';
+import { ChevronLeft, Volume2, VolumeX, Music, Music2, Share2, Star, Wind, Zap, Moon, Leaf, Cloud, Activity, Sun, Palette, Sparkles, Layers, HelpCircle } from 'lucide-react';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -22,6 +22,7 @@ interface SettingsScreenProps {
   onVolumeChange: (volume: number) => void;
   hardModeOn: boolean;
   onToggleHardMode: () => void;
+  onHowToPlay: () => void;
 }
 
 const THEMES: ThemeName[] = [
@@ -31,10 +32,10 @@ const THEMES: ThemeName[] = [
 ];
 
 const PALETTES = [
-  { name: 'Classic', colors: ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#71717A'] },
-  { name: 'Pastel', colors: ['#FCA5A5', '#93C5FD', '#6EE7B7', '#FCD34D', '#C4B5FD', '#67E8F9', '#F9A8D4', '#D1D5DB'] },
-  { name: 'Neon', colors: ['#FF0000', '#00FFFF', '#00FF00', '#FFFF00', '#FF00FF', '#0000FF', '#FFA500', '#FFFFFF'] },
-  { name: 'Earth', colors: ['#78350F', '#064E3B', '#1E3A8A', '#7C2D12', '#4C1D95', '#164E63', '#831843', '#111827'] },
+  { name: 'Classic', colors: ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#F97316', '#84CC16', '#A855F7', '#14B8A6', '#F43F5E'] },
+  { name: 'Pastel', colors: ['#FCA5A5', '#93C5FD', '#6EE7B7', '#FCD34D', '#C4B5FD', '#67E8F9', '#F9A8D4', '#FDA4AF', '#FED7AA', '#D9F99D', '#99F6E4', '#F5D0FE'] },
+  { name: 'Neon', colors: ['#FF0000', '#00FFFF', '#00FF00', '#FFFF00', '#FF00FF', '#0000FF', '#FFA500', '#FFFFFF', '#FF007F', '#CCFF00', '#7F00FF', '#007FFF'] },
+  { name: 'Earth', colors: ['#78350F', '#064E3B', '#1E3A8A', '#7C2D12', '#4C1D95', '#164E63', '#831843', '#3F3F46', '#451A03', '#B45309', '#15803D', '#78716C'] },
 ];
 
 const ACCENT_COLORS: { id: AccentColor, color: string, name: string }[] = [
@@ -66,8 +67,67 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   volume,
   onVolumeChange,
   hardModeOn,
-  onToggleHardMode
+  onToggleHardMode,
+  onHowToPlay
 }) => {
+  const [shareToast, setShareToast] = React.useState<string | null>(null);
+  const [rateToast, setRateToast] = React.useState<string | null>(null);
+
+  const handleShare = async () => {
+    const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.colorflow.zen.puzzle';
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'ColorFlow: Zen Puzzle',
+          text: 'Play ColorFlow: Zen Puzzle, the super addictive and relaxing color routing puzzle game!',
+          url: playStoreUrl
+        });
+        setShareToast('Shared successfully!');
+      } else {
+        await navigator.clipboard.writeText(playStoreUrl);
+        setShareToast('Link copied to clipboard! Share it with your friends.');
+      }
+    } catch (err) {
+      console.error("Failed to share", err);
+      try {
+        await navigator.clipboard.writeText(playStoreUrl);
+        setShareToast('Link copied to clipboard!');
+      } catch (e) {
+        setShareToast('Store Link: ' + playStoreUrl);
+      }
+    }
+    setTimeout(() => setShareToast(null), 4000);
+  };
+
+  const handleRateUs = () => {
+    const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.colorflow.zen.puzzle';
+    setRateToast('Opening Google Play Store... Please leave some feedback!');
+    setTimeout(() => {
+      setRateToast(null);
+      window.open(playStoreUrl, '_blank', 'noopener,noreferrer');
+    }, 1500);
+  };
+
+  const getThemeColors = (themeName: ThemeName) => {
+    switch (themeName) {
+      case 'forest': return { bg: 'bg-[#064e3b]', accent: '#10b981', secondary: '#065f46' };
+      case 'ocean': return { bg: 'bg-[#0c4a6e]', accent: '#0ea5e9', secondary: '#075985' };
+      case 'space': return { bg: 'bg-[#1e1b4b]', accent: '#8b5cf6', secondary: '#312e81' };
+      case 'candy': return { bg: 'bg-[#831843]', accent: '#ec4899', secondary: '#9d174d' };
+      case 'desert': return { bg: 'bg-[#7c2d12]', accent: '#f97316', secondary: '#9a3412' };
+      case 'arctic': return { bg: 'bg-[#334155]', accent: '#94a3b8', secondary: '#1e293b' };
+      case 'volcano': return { bg: 'bg-[#7f1d1d]', accent: '#ef4444', secondary: '#991b1b' };
+      case 'garden': return { bg: 'bg-[#14532d]', accent: '#22c55e', secondary: '#166534' };
+      case 'city': return { bg: 'bg-[#0f172a]', accent: '#64748b', secondary: '#1e293b' };
+      case 'clouds': return { bg: 'bg-[#1e3a8a]', accent: '#60a5fa', secondary: '#1e40af' };
+      case 'cyber': return { bg: 'bg-[#0a0a0a]', accent: '#f0abfc', secondary: '#701a75' };
+      case 'zen': return { bg: 'bg-[#1c1917]', accent: '#d6d3d1', secondary: '#44403c' };
+      default: return { bg: 'bg-[#064e3b]', accent: '#10b981', secondary: '#065f46' };
+    }
+  };
+
+  const colors = getThemeColors(preferredTheme || 'forest');
+
   const getThemeGradient = (themeName: ThemeName) => {
     switch (themeName) {
       case 'forest': return 'from-green-900 to-green-500';
@@ -87,13 +147,20 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-[#064e3b] flex flex-col text-white overflow-hidden">
+    <div className={`fixed inset-0 ${colors.bg} flex flex-col text-white overflow-hidden transition-colors duration-500`}>
       {/* Background Blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div 
           animate={{ x: [0, 40, 0], y: [0, 40, 0], scale: [1, 1.2, 1] }}
           transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-          className="absolute -top-1/4 -right-1/4 w-[80vw] h-[80vw] bg-white rounded-full opacity-5 blur-[120px]"
+          className="absolute -top-1/4 -right-1/4 w-[80vw] h-[80vw] rounded-full opacity-35 blur-[120px]"
+          style={{ background: `radial-gradient(circle, ${colors.accent} 0%, transparent 70%)` }}
+        />
+        <motion.div 
+          animate={{ x: [0, -40, 0], y: [0, 40, 0], scale: [1, 1.2, 1] }}
+          transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+          className="absolute -bottom-1/4 -left-1/4 w-[90vw] h-[90vw] rounded-full opacity-25 blur-[140px]"
+          style={{ background: `radial-gradient(circle, ${colors.secondary} 0%, transparent 70%)` }}
         />
       </div>
 
@@ -313,25 +380,58 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <div className="bg-white/5 rounded-3xl overflow-hidden border border-white/5">
           <motion.button 
             whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)', x: 4 }}
+            onClick={onHowToPlay}
+            className="w-full flex items-center gap-4 p-6 transition-colors"
+          >
+            <div className="p-3 rounded-2xl bg-cyan-500/20 text-cyan-400">
+                <HelpCircle size={24} />
+            </div>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-lg font-bold">How to Play</span>
+              <span className="text-xs text-white/40">Learn the interactive basics of routing colors!</span>
+            </div>
+          </motion.button>
+
+          <div className="h-[1px] bg-white/5 mx-6" />
+
+          {shareToast && (
+            <div className="bg-indigo-500/25 text-indigo-200 text-xs text-center py-2 px-4 border-b border-indigo-500/10">
+              {shareToast}
+            </div>
+          )}
+          <motion.button 
+            whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)', x: 4 }}
+            onClick={handleShare}
             className="w-full flex items-center gap-4 p-6 transition-colors"
           >
             <div className="p-3 rounded-2xl bg-indigo-500/20 text-indigo-500">
                 <Share2 size={24} />
             </div>
-            <span className="text-lg font-bold">Share App</span>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-lg font-bold">Share App</span>
+              <span className="text-xs text-white/40">Invite your friends to play!</span>
+            </div>
           </motion.button>
           
           <div className="h-[1px] bg-white/5 mx-6" />
 
+          {rateToast && (
+            <div className="bg-yellow-500/25 text-yellow-200 text-xs text-center py-2 px-4 border-b border-yellow-500/10">
+              {rateToast}
+            </div>
+          )}
           <motion.button 
             whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)', x: 4 }}
-            onClick={() => console.log('Rate Us clicked - Opening app store interface...')}
+            onClick={handleRateUs}
             className="w-full flex items-center gap-4 p-6 transition-colors"
           >
             <div className="p-3 rounded-2xl bg-yellow-500/20 text-yellow-500">
                 <Star size={24} />
             </div>
-            <span className="text-lg font-bold">Rate Us</span>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-lg font-bold">Rate Us</span>
+              <span className="text-xs text-white/40">Submit feedback or rate 5 stars!</span>
+            </div>
           </motion.button>
 
           <div className="h-[1px] bg-white/5 mx-6" />
@@ -353,7 +453,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
         <div className="pt-12 pb-20 text-center text-white/20">
             <p className="text-xs font-black uppercase tracking-[0.5em]">ColorFlow Pro</p>
-            <p className="text-[10px] mt-2 font-bold mb-4">VERSION 1.6.0</p>
+            <p className="text-[10px] mt-2 font-bold mb-4">VERSION 1.8.0</p>
             <button 
               onClick={() => window.location.reload()}
               className="px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[10px] font-black uppercase tracking-widest transition-all"

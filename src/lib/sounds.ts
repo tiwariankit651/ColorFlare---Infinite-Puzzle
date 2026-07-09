@@ -275,25 +275,29 @@ class SoundService {
   }
 
   private playUpbeat() {
-    const notes = [261.63, 329.63, 392.00, 523.25]; // C Major Chord
+    const notes = [261.63, 329.63, 392.00, 523.25]; // C4 Major Chord
+    let step = 0;
     const playNote = () => {
       if (!this.ctx || !this.musicGain || this.currentStyle !== 'upbeat' || !this.isDocumentVisible || !this.musicEnabled) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
-      osc.frequency.value = notes[Math.floor(Math.random() * notes.length)];
+      
+      const freq = notes[step % notes.length] * (step % 3 === 0 ? 1.5 : 1.0);
+      osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
       
       gain.gain.setValueAtTime(0, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.02, this.ctx.currentTime + 0.1);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+      gain.gain.linearRampToValueAtTime(0.02, this.ctx.currentTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.4);
       
       osc.connect(gain);
       gain.connect(this.musicGain);
       osc.start();
-      osc.stop(this.ctx.currentTime + 0.5);
+      osc.stop(this.ctx.currentTime + 0.4);
       this.musicNodes.push(osc, gain);
       
-      this.loopTimeout = setTimeout(playNote, 400); // Slightly slower for relaxed feel
+      step++;
+      this.loopTimeout = setTimeout(playNote, 250); // Faster rhythm
     };
     playNote();
   }
@@ -338,54 +342,86 @@ class SoundService {
 
   private playLofi() {
     const notes = [130.81, 146.83, 164.81, 196.00, 220.00]; // C3 Pentatonic
-    const playNote = () => {
+    let beatStep = 0;
+
+    const playStep = () => {
       if (!this.ctx || !this.musicGain || this.currentStyle !== 'lofi' || !this.isDocumentVisible || !this.musicEnabled) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      const filter = this.ctx.createBiquadFilter();
       
-      osc.type = 'triangle';
-      osc.frequency.value = notes[Math.floor(Math.random() * notes.length)];
-      filter.type = 'lowpass';
-      filter.frequency.value = 800;
-      
-      gain.gain.setValueAtTime(0, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.04, this.ctx.currentTime + 0.5);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 4);
-      
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.musicGain);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 4);
-      this.musicNodes.push(osc, gain, filter);
-      
-      this.loopTimeout = setTimeout(playNote, 2000);
+      // Kick drum
+      if (beatStep % 4 === 0 || beatStep % 4 === 2) {
+        const kickOsc = this.ctx.createOscillator();
+        const kickGain = this.ctx.createGain();
+        kickOsc.type = 'sine';
+        kickOsc.frequency.setValueAtTime(140, this.ctx.currentTime);
+        kickOsc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.12);
+        kickGain.gain.setValueAtTime(0.06, this.ctx.currentTime);
+        kickGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
+        kickOsc.connect(kickGain);
+        kickGain.connect(this.musicGain);
+        kickOsc.start();
+        kickOsc.stop(this.ctx.currentTime + 0.2);
+        this.musicNodes.push(kickOsc, kickGain);
+      }
+
+      // Melody
+      if (beatStep % 4 === 0 || beatStep % 4 === 3) {
+        const melOsc = this.ctx.createOscillator();
+        const melGain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+        
+        melOsc.type = 'triangle';
+        melOsc.frequency.value = notes[Math.floor(Math.random() * notes.length)] * 2;
+        filter.type = 'lowpass';
+        filter.frequency.value = 600; // Warm lowpass
+        
+        melGain.gain.setValueAtTime(0, this.ctx.currentTime);
+        melGain.gain.linearRampToValueAtTime(0.03, this.ctx.currentTime + 0.3);
+        melGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 1.6);
+        
+        melOsc.connect(filter);
+        filter.connect(melGain);
+        melGain.connect(this.musicGain);
+        melOsc.start();
+        melOsc.stop(this.ctx.currentTime + 1.6);
+        this.musicNodes.push(melOsc, melGain, filter);
+      }
+
+      beatStep++;
+      this.loopTimeout = setTimeout(playStep, 600); // 100 BPM
     };
-    playNote();
+    playStep();
   }
 
   private playSpace() {
-    const playDrone = () => {
+    const retroNotes = [130.81, 146.83, 164.81, 196.00, 220.00, 261.63]; // Retro Scale
+    let noteIndex = 0;
+    const playRetroTune = () => {
       if (!this.ctx || !this.musicGain || this.currentStyle !== 'retro' || !this.isDocumentVisible || !this.musicEnabled) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 55 + Math.random() * 2; // Low A drone
+      
+      osc.type = 'square'; // Nostalgic 8-bit square wave
+      const baseFreq = retroNotes[noteIndex % retroNotes.length];
+      osc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
+      
+      if (noteIndex % 4 === 0) {
+        osc.frequency.setValueAtTime(baseFreq * 1.5, this.ctx.currentTime + 0.08);
+      }
       
       gain.gain.setValueAtTime(0, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.03, this.ctx.currentTime + 5);
-      gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 15);
+      gain.gain.linearRampToValueAtTime(0.015, this.ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.22);
       
       osc.connect(gain);
       gain.connect(this.musicGain);
       osc.start();
-      osc.stop(this.ctx.currentTime + 15);
+      osc.stop(this.ctx.currentTime + 0.22);
       this.musicNodes.push(osc, gain);
       
-      this.loopTimeout = setTimeout(playDrone, 10000);
+      noteIndex++;
+      this.loopTimeout = setTimeout(playRetroTune, 180);
     };
-    playDrone();
+    playRetroTune();
   }
 
   private playNature() {
@@ -404,10 +440,10 @@ class SoundService {
       
       const filter = this.ctx.createBiquadFilter();
       filter.type = 'lowpass';
-      filter.frequency.setTargetAtTime(1000, this.ctx.currentTime, 0.5);
+      filter.frequency.setTargetAtTime(800, this.ctx.currentTime, 0.5);
       
       const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(0.01, this.ctx.currentTime);
+      gain.gain.setValueAtTime(0.008, this.ctx.currentTime);
       
       whiteNoise.connect(filter);
       filter.connect(gain);
@@ -415,7 +451,41 @@ class SoundService {
       whiteNoise.start();
       this.musicNodes.push(whiteNoise, filter, gain);
     };
+
+    const playWaterChirp = () => {
+      if (!this.ctx || !this.musicGain || this.currentStyle !== 'nature' || !this.isDocumentVisible || !this.musicEnabled) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      
+      const isDroplet = Math.random() < 0.5;
+      if (isDroplet) {
+        // Drop frequency sweep
+        osc.frequency.setValueAtTime(900, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1700, this.ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.025, this.ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
+      } else {
+        // High bird chirp sweep
+        osc.frequency.setValueAtTime(2400, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(3100, this.ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.015, this.ctx.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+      }
+      
+      osc.connect(gain);
+      gain.connect(this.musicGain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.15);
+      this.musicNodes.push(osc, gain);
+      
+      this.loopTimeout = setTimeout(playWaterChirp, 1500 + Math.random() * 2500);
+    };
+
     playRain();
+    playWaterChirp();
   }
 
   setEnabled(enabled: boolean) {

@@ -415,7 +415,9 @@ export const LevelEditorScreen: React.FC<LevelEditorScreenProps> = ({ onBack, us
                   setGrid={setPlaytestGrid}
                   colors={PALETTE_COLORS}
                   onComplete={handlePlaytestComplete}
-                  onMove={() => setPlaytestMoves(prev => prev + 1)}
+                  onMove={(nextGrid, colorIndex, isStartStroke) => {
+                    setPlaytestMoves(prev => prev + 1);
+                  }}
                   moveCount={playtestMoves}
                 />
               </div>

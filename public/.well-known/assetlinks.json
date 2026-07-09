@@ -3,8 +3,11 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.yourname.colorflow",
-      "sha256_cert_fingerprints": ["PASTE_YOUR_SHA256_FINGERPRINT_HERE"]
+      "package_name": "com.colorflow.zen.puzzle",
+      "sha256_cert_fingerprints": [
+        "7C:0F:4E:37:CD:1F:EB:43:DC:5B:82:58:4A:E1:86:F0:54:E8:5D:E1:FC:74:46:00:58:50:BE:C6:AD:71:E7:AD",
+        "DF:AB:82:7C:3A:BE:D6:1B:7B:86:C8:70:DF:8F:AE:60:7A:DB:1D:E4:21:2D:9B:04:FD:39:22:B7:3B:BD:E5:08"
+      ]
     }
   }
 ]

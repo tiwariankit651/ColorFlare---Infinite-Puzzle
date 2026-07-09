@@ -9,19 +9,32 @@ interface GameBoardProps {
   level: Level;
   grid: any[][];
   setGrid: (grid: any[][]) => void;
-  onComplete: () => void;
+  onComplete: (finalGrid?: any[][]) => void;
   colors: string[];
   hintPath?: { r: number, c: number }[];
-  onMove?: (nextGrid: any[][], colorIndex: number) => void;
+  onMove?: (nextGrid: any[][], colorIndex: number, isStartStroke?: boolean) => void;
   onError?: () => void;
   moveCount?: number;
   showingSolution?: boolean;
 }
 
-export const GameBoard: React.FC<GameBoardProps> = ({ level, grid, setGrid, onComplete, colors, hintPath, onMove, onError, moveCount = 0, showingSolution = false }) => {
+export const GameBoard: React.FC<GameBoardProps> = ({ 
+  level, 
+  grid, 
+  setGrid, 
+  onComplete, 
+  colors, 
+  hintPath, 
+  onMove, 
+  onError, 
+  moveCount = 0, 
+  showingSolution = false 
+}) => {
   const [activeColor, setActiveColor] = useState<number | null>(null);
   const [lastCell, setLastCell] = useState<{ r: number, c: number } | null>(null);
+  const [startCell, setStartCell] = useState<{ r: number, c: number } | null>(null);
   const [pulsePos, setPulsePos] = useState<{ r: number, c: number, color: string } | null>(null);
+  const [hasClearedThisStroke, setHasClearedThisStroke] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const clearColor = useCallback((colorIndex: number) => {
@@ -36,22 +49,27 @@ export const GameBoard: React.FC<GameBoardProps> = ({ level, grid, setGrid, onCo
     ));
   }, [grid, setGrid, showingSolution]);
 
-  const handleCellInteraction = useCallback((r: number, c: number) => {
+  const handleCellInteraction = useCallback((r: number, c: number, isInitiating: boolean = false) => {
     if (showingSolution) return;
     if (r < 0 || r >= grid.length || c < 0 || c >= (grid[r]?.length || 0)) return;
     const cell = grid[r][c];
 
-    // Start from a dot
-    if (cell.type === CellType.DOT) {
-      const colorIdx = cell.colorIndex!;
-      onMove?.(grid, colorIdx);
-      clearColor(colorIdx);
-      setActiveColor(colorIdx);
-      setLastCell({ r, c });
+    // Case 1: Start drawing
+    if (isInitiating) {
+      if (cell.type === CellType.DOT) {
+        const colorIdx = cell.colorIndex!;
+        onMove?.(grid, colorIdx, true);
+        // Do NOT clearColor immediately on click/touch to prevent losing existing paths on simple taps.
+        setActiveColor(colorIdx);
+        setLastCell({ r, c });
+        setStartCell({ r, c });
+        setHasClearedThisStroke(false);
+        sounds.playClick();
+      }
       return;
     }
 
-    // Continue path
+    // Case 2: Continue path
     if (activeColor === null || lastCell === null) return;
     if (cell.type === CellType.WALL || cell.type === CellType.ROTATOR) return;
 
@@ -63,50 +81,87 @@ export const GameBoard: React.FC<GameBoardProps> = ({ level, grid, setGrid, onCo
       return;
     }
 
-    // Can't go on another color's path
-    if (cell.isPath && cell.pathColorIndex !== activeColor) {
+    // Handle initial clearing of path if we move to a cell that is not part of the existing path
+    let currentGrid = grid;
+    if (!hasClearedThisStroke) {
+      const isPartOfExistingPath = cell.pathColorIndex === activeColor && cell.isPath;
+      if (!isPartOfExistingPath) {
+        currentGrid = grid.map(row => 
+          row.map(cItem => {
+            if (cItem.pathColorIndex === activeColor) {
+              return { ...cItem, isPath: false, pathColorIndex: undefined };
+            }
+            return cItem;
+          })
+        );
+        setHasClearedThisStroke(true);
+      }
+    }
+
+    const cellState = currentGrid[r][c];
+
+    // Blocked by DOTs of other colors
+    if (cellState.type === CellType.DOT && cellState.colorIndex !== activeColor) {
       onError?.();
       return;
     }
 
-    const nextGrid = [...grid.map(row => [...row])];
+    // Can't go on another color's path - but in ColorFlare, we break/clear the crossed color path for forgiveness!
+    if (cellState.isPath && cellState.pathColorIndex !== activeColor) {
+      const crossedColor = cellState.pathColorIndex;
+      currentGrid = currentGrid.map(row => 
+        row.map(cItem => {
+          if (cItem.pathColorIndex === crossedColor) {
+            return { ...cItem, isPath: false, pathColorIndex: undefined };
+          }
+          return cItem;
+        })
+      );
+    }
+
+    const nextGrid = [...currentGrid.map(row => [...row])];
     nextGrid[r][c] = { ...nextGrid[r][c], isPath: true, pathColorIndex: activeColor };
     
     // Teleporter logic
     let targetCell = { r, c };
-    if (cell.type === CellType.TELEPORTER) {
-      const pairId = cell.colorIndex;
+    if (cellState.type === CellType.TELEPORTER) {
+      const pairId = cellState.colorIndex;
       const otherPair = level.grid.flat().find(f => f.type === CellType.TELEPORTER && f.colorIndex === pairId && (f.row !== r || f.col !== c));
       if (otherPair) {
         nextGrid[otherPair.row][otherPair.col] = { ...nextGrid[otherPair.row][otherPair.col], isPath: true, pathColorIndex: activeColor };
         targetCell = { r: otherPair.row, c: otherPair.col };
-        sounds.playConnect(); // Extra sound for teleport
+        sounds.playConnect();
       }
     }
 
     sounds.playConnect();
 
-    // Use functional state updates carefully here
     const winCheckLevel = { ...level, grid: nextGrid };
     if (PathValidator.isLevelComplete(winCheckLevel)) {
-        setTimeout(onComplete, 100);
+        setTimeout(() => onComplete?.(nextGrid), 100);
     }
     
-    onMove?.(grid, activeColor); // Record current grid to history before applying next
+    onMove?.(nextGrid, activeColor, false);
     setGrid(nextGrid);
     setLastCell(targetCell);
 
-    // Check if reached the other dot
-    if (cell.type === CellType.DOT && cell.colorIndex === activeColor) {
-      setPulsePos({ r, c, color: colors[activeColor] });
-      setTimeout(() => setPulsePos(null), 1000);
-      setActiveColor(null);
-      setLastCell(null);
+    // Check if reached the other dot of the same color
+    if (cellState.type === CellType.DOT && cellState.colorIndex === activeColor) {
+      if (startCell && (r !== startCell.r || c !== startCell.c)) {
+        setPulsePos({ r, c, color: colors[activeColor % colors.length] });
+        setTimeout(() => setPulsePos(null), 1000);
+        setActiveColor(null);
+        setLastCell(null);
+        setStartCell(null);
+      }
     }
-  }, [grid, activeColor, lastCell, clearColor, level, onComplete, onMove, setGrid]);
+  }, [grid, activeColor, lastCell, startCell, clearColor, level, onComplete, onMove, setGrid, colors, hasClearedThisStroke]);
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!containerRef.current) return;
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+    if (activeColor === null || !containerRef.current) return;
     const touch = e.touches[0];
     const rect = containerRef.current.getBoundingClientRect();
     const x = touch.clientX - rect.left;
@@ -118,7 +173,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ level, grid, setGrid, onCo
     
     if (row >= 0 && row < level.gridSize && col >= 0 && col < level.gridSize) {
       if (lastCell?.r !== row || lastCell?.c !== col) {
-        handleCellInteraction(row, col);
+        handleCellInteraction(row, col, false);
       }
     }
   };
@@ -135,7 +190,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ level, grid, setGrid, onCo
     
     if (row >= 0 && row < level.gridSize && col >= 0 && col < level.gridSize) {
       if (lastCell?.r !== row || lastCell?.c !== col) {
-        handleCellInteraction(row, col);
+        handleCellInteraction(row, col, false);
       }
     }
   };
@@ -156,19 +211,42 @@ export const GameBoard: React.FC<GameBoardProps> = ({ level, grid, setGrid, onCo
 
   const isHintCell = (r: number, c: number) => {
     if (!hintPath || hintStep === -1) return false;
-    // Show all cells up to the current hint step
     const cellIdx = hintPath.findIndex(p => p.r === r && p.c === c);
     return cellIdx !== -1 && cellIdx < hintStep;
   };
 
   const isTutorialCell = (r: number, c: number) => {
     if (!hintPath || hintPath.length === 0 || level.number > 2) return false;
-    // For tutorial, we'll highlight the cell they should touch next
-    // If moveCount is 0, highlight start. If 1, highlight next, etc.
     const step = Math.min(hintPath.length - 1, moveCount);
     const target = hintPath[step];
     return target && target.r === r && target.c === c;
   };
+
+  const handleRelease = () => {
+    setActiveColor(null);
+    setLastCell(null);
+    setStartCell(null);
+  };
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const preventDefault = (e: TouchEvent) => {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+
+    // Register touch start and touch move natively with passive: false to force cancelable preventDefault
+    el.addEventListener('touchstart', preventDefault, { passive: false });
+    el.addEventListener('touchmove', preventDefault, { passive: false });
+
+    return () => {
+      el.removeEventListener('touchstart', preventDefault);
+      el.removeEventListener('touchmove', preventDefault);
+    };
+  }, []);
 
   return (
     <div 
@@ -177,37 +255,52 @@ export const GameBoard: React.FC<GameBoardProps> = ({ level, grid, setGrid, onCo
       style={{
         gridTemplateColumns: `repeat(${level.gridSize}, 1fr)`,
         gridTemplateRows: `repeat(${level.gridSize}, 1fr)`,
-        touchAction: 'none'
+        touchAction: 'none',
+        overscrollBehavior: 'none'
       }}
       onMouseDown={(e) => {
           const rect = containerRef.current!.getBoundingClientRect();
           const col = Math.floor((e.clientX - rect.left) / (rect.width / level.gridSize));
           const row = Math.floor((e.clientY - rect.top) / (rect.width / level.gridSize));
-          handleCellInteraction(row, col);
+          handleCellInteraction(row, col, true);
       }}
       onMouseMove={handleMouseMove}
-      onMouseUp={() => { setActiveColor(null); setLastCell(null); }}
-      onMouseLeave={() => { setActiveColor(null); setLastCell(null); }}
+      onMouseUp={handleRelease}
+      onMouseLeave={handleRelease}
       onTouchStart={(e) => {
+          if (e.cancelable) {
+            e.preventDefault();
+          }
           const rect = containerRef.current!.getBoundingClientRect();
           const touch = e.touches[0];
           const col = Math.floor((touch.clientX - rect.left) / (rect.width / level.gridSize));
           const row = Math.floor((touch.clientY - rect.top) / (rect.width / level.gridSize));
-          handleCellInteraction(row, col);
+          handleCellInteraction(row, col, true);
       }}
       onTouchMove={handleTouchMove}
-      onTouchEnd={() => { setActiveColor(null); setLastCell(null); }}
+      onTouchEnd={handleRelease}
     >
-      {grid.flat().map((cell, idx) => (
-        <CellComponent
-          key={`${cell.row}-${cell.col}`}
-          cell={cell}
-          color={cell.pathColorIndex !== undefined ? colors[cell.pathColorIndex] : (cell.colorIndex !== undefined ? colors[cell.colorIndex] : undefined)}
-          isActive={lastCell?.r === cell.row && lastCell?.c === cell.col}
-          isHint={isHintCell(cell.row, cell.col)}
-          isTutorial={isTutorialCell(cell.row, cell.col)}
-        />
-      ))}
+      {grid.flat().map((cell, idx) => {
+        let cellHintColor: string | undefined = undefined;
+        if (showingSolution && level.solutionPaths) {
+          const pathIdx = level.solutionPaths.findIndex(path => path.some(p => p.r === cell.row && p.c === cell.col));
+          if (pathIdx !== -1) {
+            cellHintColor = colors[pathIdx % colors.length];
+          }
+        }
+
+        return (
+          <CellComponent
+            key={`${cell.row}-${cell.col}`}
+            cell={cell}
+            color={cell.pathColorIndex !== undefined ? colors[cell.pathColorIndex % colors.length] : (cell.colorIndex !== undefined ? colors[cell.colorIndex % colors.length] : undefined)}
+            isActive={lastCell?.r === cell.row && lastCell?.c === cell.col}
+            isHint={isHintCell(cell.row, cell.col)}
+            isTutorial={isTutorialCell(cell.row, cell.col)}
+            hintColor={cellHintColor}
+          />
+        );
+      })}
 
       {/* Connection Pulse Effect */}
       <AnimatePresence>

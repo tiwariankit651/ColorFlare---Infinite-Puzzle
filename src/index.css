@@ -35,6 +35,11 @@
     --accent-color: #10B981;
   }
 
+  html, body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+  }
+
   body {
     @apply bg-[#0a0a0a] text-white font-sans;
   }

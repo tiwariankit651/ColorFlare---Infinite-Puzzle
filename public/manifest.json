@@ -1,10 +1,11 @@
 {
-  "id": "com.colorflow.zen.puzzle",
+  "id": "/",
   "name": "ColorFlow: Zen Puzzle",
   "short_name": "ColorFlow",
   "description": "A relaxing color-based puzzle game to find your flow.",
-  "start_url": "./",
-  "scope": ".",
+  "lang": "en",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#064e3b",
   "theme_color": "#10b981",
@@ -18,41 +19,40 @@
     }
   ],
   "prefer_related_applications": true,
-  "icons": [
-    {
-      "src": "https://raw.githubusercontent.com/tiwariankit651/ColorFlare---Infinite-Puzzle/main/public/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "https://raw.githubusercontent.com/tiwariankit651/ColorFlare---Infinite-Puzzle/main/public/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
   "screenshots": [
     {
-      "src": "screenshots/home_screen.png",
-      "sizes": "800x1452",
-      "type": "image/png",
+      "src": "/screenshot-mobile.jpg",
+      "sizes": "1080x1920",
+      "type": "image/jpeg",
       "form_factor": "narrow",
-      "label": "Home Screen"
+      "label": "ColorFlow on Mobile"
     },
     {
-      "src": "screenshots/gameplay_action.png",
-      "sizes": "800x1452",
+      "src": "/screenshot-desktop.jpg",
+      "sizes": "1920x1080",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "ColorFlow on Desktop"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
       "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Gameplay"
+      "purpose": "any"
     },
     {
-      "src": "screenshots/level_selection.png",
-      "sizes": "800x1452",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Level Selection"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronLeft, Trophy, Calendar, Clock, Star, Play, Award, Zap, 
-  Users, CheckCircle, RefreshCw, AlertCircle, Sparkles, Gift, ShieldAlert, BadgeInfo 
+  Users, CheckCircle, RefreshCw, AlertCircle, Sparkles, Gift, ShieldAlert, BadgeInfo, Lightbulb 
 } from 'lucide-react';
 import { GameBoard } from './GameBoard';
 import { sounds } from '../lib/sounds';
@@ -20,6 +20,9 @@ interface TournamentScreenProps {
   onUpdateStars: (amount: number) => void;
   onUpdateRank?: (rank: number) => void;
   onUnlockHint?: (amount: number) => void;
+  hintsRemaining?: number;
+  onHintUsed?: () => void;
+  palette?: string[];
 }
 
 interface TournamentLeader {
@@ -69,8 +72,23 @@ export const TournamentScreen: React.FC<TournamentScreenProps> = ({
   avatarEmoji, 
   onUpdateStars,
   onUpdateRank,
-  onUnlockHint
+  onUnlockHint,
+  hintsRemaining = 0,
+  onHintUsed,
+  palette
 }) => {
+  const gameColors = palette || [
+    '#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#F97316', '#84CC16', '#A855F7', '#14B8A6', '#F43F5E'
+  ];
+  const [showingSolution, setShowingSolution] = useState(false);
+  const hintTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
+    };
+  }, []);
+
   // Determine current day of week (Monday is 0, Sunday is 6)
   const currentDayIndex = useMemo(() => {
     const day = new Date().getDay(); // 0 = Sunday, 1 = Mon ... 6 = Sat
@@ -325,7 +343,7 @@ export const TournamentScreen: React.FC<TournamentScreenProps> = ({
     let active = true;
     const fetchArenaData = async () => {
       try {
-        const leaders = await LeaderboardService.getTournamentLeaderboard(20);
+        const leaders = await LeaderboardService.getTournamentLeaderboard(100);
         if (!active) return;
 
         const currentUid = auth.currentUser?.uid;
@@ -480,6 +498,11 @@ export const TournamentScreen: React.FC<TournamentScreenProps> = ({
     setTimeLeftForGame(timeAllowed);
     setIsGameOver(false);
     setEarnedHintThisLevel(false);
+    setShowingSolution(false);
+    if (hintTimeoutRef.current) {
+      clearTimeout(hintTimeoutRef.current);
+      hintTimeoutRef.current = null;
+    }
     // Deep clone today's template grid for gameplay
     const targetLvl = dailyLevels[index];
     const clonedGrid = targetLvl.grid.map(row => row.map(cell => ({ ...cell })));
@@ -511,6 +534,11 @@ export const TournamentScreen: React.FC<TournamentScreenProps> = ({
       setIsGameOver(false);
       setIsDone(false);
       setEarnedHintThisLevel(false);
+      setShowingSolution(false);
+      if (hintTimeoutRef.current) {
+        clearTimeout(hintTimeoutRef.current);
+        hintTimeoutRef.current = null;
+      }
       
       const targetLvl = dailyLevels[nextIndex];
       const clonedGrid = targetLvl.grid.map(row => row.map(cell => ({ ...cell })));
@@ -534,7 +562,7 @@ export const TournamentScreen: React.FC<TournamentScreenProps> = ({
     return () => clearInterval(intervalTimer);
   }, [currentLevelIndex, isGameOver, isDone]);
 
-  const handleTournamentMove = () => {
+  const handleTournamentMove = (nextGrid: any, colorIndex: number, isStartStroke?: boolean) => {
     if (isGameOver || isDone) return;
     setMoveCount(prev => prev + 1);
     setMovesLeft(prev => {
@@ -544,6 +572,19 @@ export const TournamentScreen: React.FC<TournamentScreenProps> = ({
       }
       return prev - 1;
     });
+  };
+
+  const handleUseHint = () => {
+    if (currentLevelIndex === null || !tempGrid || showingSolution || hintsRemaining <= 0) return;
+
+    setShowingSolution(true);
+    onHintUsed?.();
+
+    if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
+    hintTimeoutRef.current = setTimeout(() => {
+        setShowingSolution(false);
+        hintTimeoutRef.current = null;
+    }, 12000);
   };
 
   const resetLevel = () => {
@@ -565,6 +606,11 @@ export const TournamentScreen: React.FC<TournamentScreenProps> = ({
     setIsGameOver(false);
     setIsDone(false);
     setEarnedHintThisLevel(false);
+    setShowingSolution(false);
+    if (hintTimeoutRef.current) {
+      clearTimeout(hintTimeoutRef.current);
+      hintTimeoutRef.current = null;
+    }
     const targetLvl = dailyLevels[currentLevelIndex];
     const clonedGrid = targetLvl.grid.map(row => row.map(cell => ({ ...cell })));
     setTempGrid(clonedGrid);
@@ -1279,6 +1325,19 @@ export const TournamentScreen: React.FC<TournamentScreenProps> = ({
       ) : (
         /* Dynamic Level Active Gameplay Overlay */
         <div className="flex-1 flex flex-col justify-between p-6 z-10 select-none max-w-lg mx-auto w-full relative">
+          {showingSolution && (
+            <motion.div 
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="absolute -top-12 left-0 right-0 z-50 text-center pointer-events-none"
+            >
+                <div className="bg-yellow-500 text-black px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-2 shadow-2xl border border-white/20 animate-bounce">
+                    <Lightbulb size={12} fill="black" className="animate-pulse" />
+                    Ghost Trails Active! Trace to Solve!
+                </div>
+            </motion.div>
+          )}
+
           <div className="mt-2 text-center space-y-1">
             <span className="text-[9px] font-black tracking-[0.3em] text-purple-400 uppercase leading-none">
               TOURNAMENT CHALLENGE {currentLevelIndex + 1} OF 7
@@ -1315,10 +1374,11 @@ export const TournamentScreen: React.FC<TournamentScreenProps> = ({
                   level={dailyLevels[currentLevelIndex]}
                   grid={tempGrid}
                   setGrid={setTempGrid}
-                  colors={['#A855F7', '#3B82F6', '#10B981', '#EAB308', '#EC4899', '#EF4444', '#06B6D4']}
+                  colors={gameColors}
                   onComplete={handleLevelComplete}
                   onMove={handleTournamentMove}
                   moveCount={moveCount}
+                  showingSolution={showingSolution}
                 />
 
                 <AnimatePresence>
@@ -1428,6 +1488,19 @@ export const TournamentScreen: React.FC<TournamentScreenProps> = ({
           </div>
 
           <div className="flex flex-col gap-3">
+            <button 
+              onClick={handleUseHint}
+              disabled={hintsRemaining <= 0 || showingSolution}
+              className={`w-full py-3.5 font-black italic text-xs tracking-widest rounded-2xl flex items-center justify-center gap-2 transition-all uppercase border ${
+                hintsRemaining > 0 && !showingSolution
+                  ? 'bg-yellow-500 hover:bg-yellow-400 text-black border-yellow-400/20 shadow-xl shadow-yellow-500/10'
+                  : 'bg-white/5 text-slate-500 border-white/5 cursor-not-allowed border-none'
+              }`}
+            >
+              <Lightbulb size={14} fill={hintsRemaining > 0 && !showingSolution ? 'black' : 'none'} />
+              {showingSolution ? 'GHOST TRAILS ACTIVE' : `USE HINT (💡 ${hintsRemaining})`}
+            </button>
+
             <button 
               onClick={() => {
                 const confirmed = confirm("Exit current level? Run progress for this active board will format back to 0.");

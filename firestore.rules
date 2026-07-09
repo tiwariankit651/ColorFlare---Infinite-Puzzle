@@ -1,80 +1,73 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 1. Default Deny catch-all
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // 2. Helper Primitives
-    function isSignedIn() { return request.auth != null; }
-    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
-    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
-    function incoming() { return request.resource.data; }
-    function existing() { return resource.data; }
-
-    // 3. Validation Blueprints
-    function isValidUser(data) {
-      return data.keys().hasAll(['uid'])
-        && data.uid == request.auth.uid
-        && (!('username' in data) || (data.username is string && data.username.size() <= 50))
-        && (!('avatarEmoji' in data) || data.avatarEmoji is string)
-        && (!('lastActive' in data) || data.lastActive is timestamp);
-    }
-
-    function isValidLeaderboard(data) {
-      return data.keys().hasAll(['username', 'userId', 'totalStars', 'currentLevel'])
-        && data.username is string && data.username.size() <= 50
-        && data.userId == request.auth.uid
-        && data.totalStars is number
-        && data.currentLevel is number
-        && (!('dailyChallenges' in data) || data.dailyChallenges is number)
-        && (!('avatarEmoji' in data) || data.avatarEmoji is string)
-        && (!('updatedAt' in data) || data.updatedAt is timestamp);
-    }
-
-    function isValidTournament(data) {
-      return data.keys().hasAll(['username', 'userId', 'score', 'time', 'moves', 'levelsCompleted'])
-        && data.username is string && data.username.size() <= 50
-        && data.userId == request.auth.uid
-        && data.score is number
-        && data.time is number
-        && data.moves is number
-        && data.levelsCompleted is number
-        && (!('avatarEmoji' in data) || data.avatarEmoji is string)
-        && (!('updatedAt' in data) || data.updatedAt is timestamp);
-    }
-
-    // 4. Collection Rules
-    match /users/{userId} {
-      allow get: if isSignedIn();
-      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
-      allow update: if isOwner(userId) && isValidUser(incoming());
-      allow delete: if false;
-    }
-
-    // Match any collection that starts with leaderboard (covers leaderboard, leaderboard_daily_*, leaderboard_weekly_*, leaderboard_tournament_*)
-    match /{collectionId}/{userId} {
-      allow list, get: if isSignedIn() && collectionId.matches('^leaderboard.*');
-      
-      allow create: if isOwner(userId) && isValidId(userId) 
-        && (
-          (collectionId.matches('^leaderboard_tournament.*') && isValidTournament(incoming())) ||
-          (!collectionId.matches('^leaderboard_tournament.*') && collectionId.matches('^leaderboard.*') && isValidLeaderboard(incoming()))
-        );
-        
-      allow update: if isOwner(userId) 
-        && (
-          (collectionId.matches('^leaderboard_tournament.*') && isValidTournament(incoming())) ||
-          (!collectionId.matches('^leaderboard_tournament.*') && collectionId.matches('^leaderboard.*') && isValidLeaderboard(incoming()))
-        );
-        
-      allow delete: if isOwner(userId) && collectionId.matches('^leaderboard.*');
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
     }
     
-    // Testing connection path
-    match /test/connection {
+    function isValidScore(incoming, existing) {
+      // 1. Max stars per level is 3
+      let maxStars = incoming.currentLevel * 3;
+      
+      // 2. Score can only increase, never decrease
+      let scoreNotDecreased = existing == null || (
+        incoming.totalStars >= existing.totalStars && 
+        incoming.currentLevel >= existing.currentLevel &&
+        incoming.dailyChallenges >= existing.dailyChallenges
+      );
+      
+      // 3. Level number can only increase by at most 1 at a time
+      let levelNotJumped = existing == null || (
+        incoming.currentLevel <= existing.currentLevel + 1
+      );
+      
+      // 4. Timestamp validation: minimum 10 seconds between level completions
+      let solveTimeValid = existing == null || 
+        !(incoming.currentLevel > existing.currentLevel || incoming.totalStars > existing.totalStars) || (
+        request.time.toMillis() - existing.updatedAt.toMillis() >= 10000
+      );
+      
+      // 5. Username/avatar changes limited to once per hour
+      let profileNotSpammed = existing == null || 
+        (incoming.username == existing.username && incoming.avatarEmoji == existing.avatarEmoji) || 
+        existing.lastProfileUpdate == null || (
+        request.time.toMillis() - existing.lastProfileUpdate.toMillis() >= 3600000
+      );
+      
+      return incoming.totalStars <= maxStars && 
+             scoreNotDecreased && 
+             levelNotJumped && 
+             solveTimeValid && 
+             profileNotSpammed;
+    }
+
+    match /users/{userId} {
       allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    match /leaderboard/{userId} {
+      allow read: if true;
+      allow create: if isOwner(userId) && isValidScore(request.resource.data, null);
+      allow update: if isOwner(userId) && isValidScore(request.resource.data, resource.data);
+    }
+
+    match /leaderboard_daily_{dailyKey}/{userId} {
+      allow read: if true;
+      allow create: if isOwner(userId) && isValidScore(request.resource.data, null);
+      allow update: if isOwner(userId) && isValidScore(request.resource.data, resource.data);
+    }
+
+    match /leaderboard_weekly_{weeklyKey}/{userId} {
+      allow read: if true;
+      allow create: if isOwner(userId) && isValidScore(request.resource.data, null);
+      allow update: if isOwner(userId) && isValidScore(request.resource.data, resource.data);
+    }
+
+    match /leaderboard_tournament_{weeklyKey}/{userId} {
+      allow read: if true;
+      allow create, update: if isOwner(userId);
     }
   }
 }

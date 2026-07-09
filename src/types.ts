@@ -4,7 +4,10 @@ export enum CellType {
   DOT = 'dot',
   WALL = 'wall',
   ROTATOR = 'rotator',
-  TELEPORTER = 'teleporter'
+  TELEPORTER = 'teleporter',
+  KEY = 'key',
+  GATE = 'gate',
+  BRIDGE = 'bridge'
 }
 
 export interface Cell {
@@ -14,6 +17,12 @@ export interface Cell {
   colorIndex?: number;
   isPath: boolean;
   pathColorIndex?: number;
+  isPathH?: boolean;
+  isPathV?: boolean;
+  pathColorIndexH?: number;
+  pathColorIndexV?: number;
+  rotation?: number;
+  variety?: 'straight' | 'curved';
 }
 
 export interface Level {
@@ -25,6 +34,9 @@ export interface Level {
   strategyName?: string;
   strategyDesc?: string;
   strategyType?: string;
+  isHardMode?: boolean;
+  maxMoves?: number;
+  timeLimit?: number;
 }
 
 export type ThemeName = 'forest' | 'ocean' | 'space' | 'candy' | 'desert' | 'arctic' | 'volcano' | 'garden' | 'city' | 'clouds' | 'cyber' | 'zen';
