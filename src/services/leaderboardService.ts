@@ -140,8 +140,8 @@ export const LeaderboardService = {
           return;
         }
 
-        // Anti-Cheat: Timestamp validation (minimum 1 second between score syncs to prevent instant loop hacks)
-        if (existingData && existingData.updatedAt && (safeInputLevel > existingLevel || safeInputStars > existingStars)) {
+        // Anti-Cheat: Timestamp validation (minimum 1 second between level increases to prevent instant level-skip hacks)
+        if (existingData && existingData.updatedAt && safeInputLevel > existingLevel) {
           const lastUpdate = existingData.updatedAt.toDate ? existingData.updatedAt.toDate() : new Date(existingData.updatedAt);
           const timeDiffSeconds = (Date.now() - lastUpdate.getTime()) / 1000;
           if (timeDiffSeconds < 1) {

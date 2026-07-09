@@ -24,6 +24,7 @@ import { GameStorage, StorageData } from './logic/storage';
 import { LeaderboardService } from './services/leaderboardService';
 import { UserService } from './services/userService';
 import { auth, authReady } from './firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { motion, AnimatePresence } from 'motion/react';
 import { AchievementService, Achievement } from './services/achievementService';
 import confetti from 'canvas-confetti';
@@ -170,6 +171,14 @@ export default function App() {
   const [data, setData] = useState<StorageData>(() => GameStorage.getData());
   const [screen, setScreenState] = useState<Screen>('splash');
   const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(auth.currentUser);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Custom setScreen wrapper to manage the browser/phone history stack
   const setScreen = (targetScreen: Screen) => {
@@ -225,7 +234,7 @@ export default function App() {
 
   // Unified Leaderboard and Cloud Sync Effect
   useEffect(() => {
-    if (!auth.currentUser || !data.username) return;
+    if (!currentUser || !data.username) return;
 
     const performSync = async () => {
       // 1. Sync stars/level/daily to leaderboard
@@ -253,6 +262,7 @@ export default function App() {
     const timeout = setTimeout(performSync, 500);
     return () => clearTimeout(timeout);
   }, [
+    currentUser,
     data.level,
     data.stars,
     data.username,
