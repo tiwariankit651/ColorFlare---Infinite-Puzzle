@@ -37,11 +37,23 @@ export const CellComponent: React.FC<CellProps> = ({
           <div className="flex items-center justify-center w-full h-full">
             <motion.div
               initial={{ scale: 0.8 }}
-              animate={{ scale: 1 }}
+              animate={cell.isPath ? {
+                scale: [1, 1.05, 1],
+              } : {
+                scale: 1,
+              }}
+              transition={cell.isPath ? {
+                duration: 0.3,
+                ease: "easeOut"
+              } : {
+                duration: 0.2
+              }}
               className="w-3/5 h-3/5 rounded-full shadow-lg"
               style={{ 
                 backgroundColor: color,
-                boxShadow: `0 0 12px ${color}66`
+                boxShadow: cell.isPath 
+                  ? `0 0 16px ${color}` 
+                  : `0 0 12px ${color}66`
               }}
             />
           </div>
@@ -150,7 +162,7 @@ export const CellComponent: React.FC<CellProps> = ({
           className="absolute inset-0 border-4 border-blue-400 rounded-md z-0"
         />
       )}
-      {cell.isPath && color && (
+      {cell.isPath && color && cell.type !== CellType.DOT && (
         <motion.div 
           initial={isActive ? { scale: 1.2 } : { scale: 0, opacity: 0 }}
           animate={isActive ? { 
@@ -168,7 +180,7 @@ export const CellComponent: React.FC<CellProps> = ({
             stiffness: 500,
             damping: 30
           }}
-          className={`absolute inset-0 z-0 ${cell.type === CellType.DOT ? 'm-0' : 'm-[25%]'} rounded-full`}
+          className="absolute inset-0 z-0 m-[25%] rounded-full"
           style={{ 
             backgroundColor: color,
             boxShadow: isActive 
