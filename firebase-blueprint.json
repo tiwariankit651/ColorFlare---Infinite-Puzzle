@@ -23,6 +23,7 @@
         "hintsRemaining": { "type": "number" },
         "hintsUsed": { "type": "number" },
         "settings": { "type": "object" },
+        "tutorialCompleted": { "type": "boolean" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "username"]

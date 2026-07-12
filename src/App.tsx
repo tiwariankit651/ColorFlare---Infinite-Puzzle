@@ -23,6 +23,7 @@ import { sounds } from './lib/sounds';
 import { GameStorage, StorageData } from './logic/storage';
 import { LeaderboardService } from './services/leaderboardService';
 import { UserService } from './services/userService';
+import { markTutorialComplete } from './services/tutorialService';
 import { auth, authReady } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { motion, AnimatePresence } from 'motion/react';
@@ -331,16 +332,10 @@ export default function App() {
   const [dailyReward, setDailyReward] = useState<{ stars: number, hints: number } | null>(null);
   const [hintEarnedToast, setHintEarnedToast] = useState(false);
   
-  const [hasSeenTutorial, setHasSeenTutorial] = useState(() => {
-    return localStorage.getItem('colorflow_tutorial') === 'true';
-  });
-  const [showTutorial, setShowTutorial] = useState(() => {
-    return localStorage.getItem('colorflow_tutorial') !== 'true';
-  });
+  const [showTutorial, setShowTutorial] = useState(false);
 
   const handleTutorialComplete = () => {
-    localStorage.setItem('colorflow_tutorial', 'true');
-    setHasSeenTutorial(true);
+    markTutorialComplete();
     setShowTutorial(false);
   };
 

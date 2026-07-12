@@ -8,6 +8,7 @@ import { TutorialOverlay } from './TutorialOverlay';
 import { GameStorage } from '../logic/storage';
 import { sounds } from '../lib/sounds';
 import confetti from 'canvas-confetti';
+import { hasTutorialBeenCompleted, markTutorialComplete } from '../services/tutorialService';
 
 interface GameScreenProps {
   currentLevel: number;
@@ -126,8 +127,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     } else {
       setTimeLeft(null);
     }
-    if (currentLevel === 1 && !localStorage.getItem('colorflow_tutorial')) {
-      setShowTutorial(true);
+    if (currentLevel === 1) {
+      hasTutorialBeenCompleted().then(completed => {
+        if (!completed) {
+          setShowTutorial(true);
+        }
+      });
     }
     return () => {
       if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
@@ -843,7 +848,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
         <TutorialOverlay 
           onComplete={() => {
             setShowTutorial(false);
-            localStorage.setItem('colorflow_tutorial', 'true');
+            markTutorialComplete();
           }} 
         />
       )}
