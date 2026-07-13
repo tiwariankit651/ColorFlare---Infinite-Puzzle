@@ -2,6 +2,9 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Settings, Play, User, Trophy } from 'lucide-react';
 import { ThemeName } from '../types';
+import { BannerAd } from './ads/BannerAd';
+import { ADS_CONFIG } from '../config/ads.config';
+
 
 interface HomeScreenProps {
   level: number;
@@ -232,14 +235,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </motion.button>
       </div>
 
+      <div className="absolute bottom-16 left-0 right-0 flex justify-center z-20 px-4">
+        <BannerAd slot={ADS_CONFIG.slots.homeBanner} className="max-w-xs" />
+      </div>
+
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.5 }}
-        className="absolute bottom-10 left-0 right-0 text-center"
+        className="absolute bottom-6 left-0 right-0 text-center pointer-events-none"
       >
         <p className="text-[10px] font-black tracking-[0.8em] text-white/10 uppercase">Never Stop Flowing</p>
       </motion.div>
     </div>
   );
 };
+

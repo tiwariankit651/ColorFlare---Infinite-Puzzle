@@ -9,6 +9,10 @@ import { GameStorage } from '../logic/storage';
 import { sounds } from '../lib/sounds';
 import confetti from 'canvas-confetti';
 import { hasTutorialBeenCompleted, markTutorialComplete } from '../services/tutorialService';
+import { useAds } from '../hooks/useAds';
+import { ADS_CONFIG } from '../config/ads.config';
+import { BannerAd, InterstitialAd, RewardedAd } from './ads';
+
 
 interface GameScreenProps {
   currentLevel: number;
@@ -73,8 +77,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
   const [starsEarned, setStarsEarned] = useState(0);
   const [shouldShake, setShouldShake] = useState(false);
   const [confettiActive, setConfettiActive] = useState(false);
+
+  // Google AdSense Integration states & hook
+  const { canShowAd, trackAdImpression } = useAds();
   const [isWatchingAd, setIsWatchingAd] = useState(false);
-  const [adReason, setAdReason] = useState<'hint'>('hint');
+  const [showInterstitialAd, setShowInterstitialAd] = useState(false);
+  const [pendingNextLevelStats, setPendingNextLevelStats] = useState<{ stars: number; moves: number; time: number } | null>(null);
+
   const [hintPath, setHintPath] = useState<{ r: number, c: number }[] | undefined>();
   const [moveCount, setMoveCount] = useState(0);
   const [lastMovedColor, setLastMovedColor] = useState<number | null>(null);
@@ -95,9 +104,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
 
   const HINT_MOVES_REQUIRED = 40;
   const HINT_COOLDOWN_MS = 10000;
-  const AD_DURATION_MS = 30000; // 30 seconds
-  const SKIP_AVAILABLE_MS = 15000; // 15 seconds
-  const [adTimeElapsed, setAdTimeElapsed] = useState(0);
+
 
   useEffect(() => {
     // Generate a stable seed for this level to ensure consistency across users and sessions
@@ -163,26 +170,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     }, 1000);
     return () => clearTimeout(timer);
   }, [timeLeft, hardModeOn, showComplete, failReason]);
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (isWatchingAd) {
-      timer = setInterval(() => {
-        setAdTimeElapsed(prev => prev + 1000);
-      }, 1000);
-    } else {
-      setAdTimeElapsed(0);
-    }
-    return () => clearInterval(timer);
-  }, [isWatchingAd]);
-
-  useEffect(() => {
-    if (isWatchingAd && adTimeElapsed >= AD_DURATION_MS) {
-      setIsWatchingAd(false);
-      setAdTimeElapsed(0);
-      triggerHintLogic();
-    }
-  }, [isWatchingAd, adTimeElapsed, AD_DURATION_MS]);
 
   const handleUndo = () => {
     if (history.length === 0 || moveHistory.length === 0) return;
@@ -287,7 +274,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
   const handleNextLevel = () => {
     setShowComplete(false);
     setConfettiActive(false);
-    onComplete({ stars: starsEarned, moves: moveCount, time: completionTime });
+    const stats = { stars: starsEarned, moves: moveCount, time: completionTime };
+
+    if (canShowAd('interstitial', currentLevel)) {
+      setPendingNextLevelStats(stats);
+      setShowInterstitialAd(true);
+      trackAdImpression('interstitial');
+    } else {
+      onComplete(stats);
+    }
+  };
+
+  const handleCloseInterstitial = () => {
+    setShowInterstitialAd(false);
+    if (pendingNextLevelStats) {
+      onComplete(pendingNextLevelStats);
+      setPendingNextLevelStats(null);
+    }
   };
 
   const triggerShake = () => {
@@ -326,9 +329,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     if (hintsRemaining > 0) {
       triggerHintLogic();
     } else {
-      setAdReason('hint');
       setIsWatchingAd(true);
-      setAdTimeElapsed(0);
     }
   };
 
@@ -804,6 +805,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
                       >
                         WATCH REPLAY
                       </button>
+
+                      {/* Level Complete Banner Ad */}
+                      <BannerAd slot={ADS_CONFIG.slots.levelCompleteBanner} className="mt-2" />
                     </div>
                   </div>
                 </motion.div>
@@ -853,72 +857,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
         />
       )}
 
-      <AnimatePresence>
-        {isWatchingAd && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-[#1E1E1E]/95 backdrop-blur-md flex flex-col items-center justify-center p-6"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="w-full max-w-xs bg-[#2a2a2a] rounded-[32px] p-8 flex flex-col items-center shadow-2xl border border-white/10"
-            >
-              <h3 className="text-white text-xl font-black italic mb-8 tracking-tight">
-                🎁 Hint Unlocking...
-              </h3>
-              
-              <div className="relative w-32 h-32 mb-8">
-                <svg className="w-full h-full -rotate-90">
-                  <circle
-                    cx="50%"
-                    cy="50%"
-                    r="45%"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="6"
-                    className="text-white/10"
-                  />
-                  <motion.circle
-                    cx="50%"
-                    cy="50%"
-                    r="45%"
-                    fill="none"
-                    stroke="#EAB308"
-                    strokeWidth="6"
-                    strokeDasharray="100"
-                    initial={{ strokeDashoffset: 100 }}
-                    animate={{ strokeDashoffset: Math.max(0, Math.min(100, Math.round(100 - (adTimeElapsed / AD_DURATION_MS) * 100))) }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-4xl font-black italic">{Math.ceil((AD_DURATION_MS - adTimeElapsed) / 1000)}</span>
-                </div>
-              </div>
-              
-              {adTimeElapsed >= SKIP_AVAILABLE_MS ? (
-                <button 
-                  onClick={() => {
-                    setIsWatchingAd(false);
-                    triggerHintLogic();
-                  }}
-                  className="bg-yellow-500 text-black px-8 py-3 rounded-2xl font-black italic tracking-widest hover:scale-105 active:scale-95 transition-transform"
-                >
-                  GET HINT ▶
-                </button>
-              ) : (
-                <p className="text-white/40 text-xs font-bold uppercase tracking-widest">
-                  Unlock in {Math.ceil((SKIP_AVAILABLE_MS - adTimeElapsed) / 1000)}s
-                </p>
-              )}
-            </motion.div>
-            
-            <p className="mt-8 text-white/20 text-[10px] font-black uppercase tracking-[0.4em]">Interactive Ad Simulation</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <RewardedAd
+        isVisible={isWatchingAd}
+        slot={ADS_CONFIG.slots.hintRewarded}
+        onRewardEarned={() => {
+          triggerHintLogic();
+        }}
+        onClose={() => {
+          setIsWatchingAd(false);
+        }}
+      />
+
+      <InterstitialAd
+        isVisible={showInterstitialAd}
+        slot={ADS_CONFIG.slots.interstitial}
+        onClose={handleCloseInterstitial}
+      />
     </div>
   );
 };
