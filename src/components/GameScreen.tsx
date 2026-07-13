@@ -4,7 +4,7 @@ import { Lightbulb, RefreshCw, ChevronLeft, HelpCircle, Undo2, FastForward, Star
 import { Level, ThemeName } from '../types';
 import { LevelGenerator } from '../logic/levelGenerator';
 import { GameBoard } from './GameBoard';
-import { TutorialOverlay } from './TutorialOverlay';
+import { InteractiveTutorial } from './InteractiveTutorial';
 import { GameStorage } from '../logic/storage';
 import { sounds } from '../lib/sounds';
 import confetti from 'canvas-confetti';
@@ -845,7 +845,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
         <p className="text-[10px] text-white/20 font-bold tracking-[0.3em] uppercase">Never Stop Flowing</p>
       </footer>
       {showTutorial && (
-        <TutorialOverlay 
+        <InteractiveTutorial 
           onComplete={() => {
             setShowTutorial(false);
             markTutorialComplete();

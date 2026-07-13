@@ -9,7 +9,7 @@ import { GameScreen } from './components/GameScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { LevelSelectScreen } from './components/LevelSelectScreen';
 import { DailyChallengeScreen } from './components/DailyChallengeScreen';
-import { TutorialOverlay } from './components/TutorialOverlay';
+import { InteractiveTutorial } from './components/InteractiveTutorial';
 import { SplashScreen } from './components/SplashScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { ProfileScreen } from './components/ProfileScreen';
@@ -983,7 +983,7 @@ export default function App() {
       {/* Interactive Tutorial Overlay */}
       <AnimatePresence>
         {showTutorial && (
-          <TutorialOverlay 
+          <InteractiveTutorial 
             onComplete={handleTutorialComplete} 
           />
         )}
