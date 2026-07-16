@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Lightbulb, RefreshCw, ChevronLeft, HelpCircle, Undo2, FastForward, Star, PlayCircle, Share2 } from 'lucide-react';
-import { Level, ThemeName } from '../types';
+import { Level, ThemeName, CellType } from '../types';
 import { LevelGenerator } from '../logic/levelGenerator';
+import { PathValidator } from '../logic/pathValidator';
 import { GameBoard } from './GameBoard';
 import { InteractiveTutorial } from './InteractiveTutorial';
 import { GameStorage } from '../logic/storage';
@@ -339,12 +340,53 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
       return;
     }
 
+    // Step 1: Find a color to hint (first unsolved or incorrectly solved)
+    let hintColorIndex = 0;
+    for (let i = 0; i < level.colorCount; i++) {
+      if (!PathValidator.isColorConnected({ ...level, grid }, i)) {
+        hintColorIndex = i;
+        break;
+      }
+    }
+
+    // Step 2: RESET the grid - clear all user-drawn paths
+    const cleanGrid = grid.map(row => row.map(cell => {
+      if (cell.type === CellType.DOT || cell.type === CellType.WALL) {
+        return {
+          ...cell,
+          isPath: false,
+          pathColorIndex: undefined,
+          isPathH: false,
+          isPathV: false,
+          pathColorIndexH: undefined,
+          pathColorIndexV: undefined
+        };
+      }
+      return {
+        ...cell,
+        isPath: false,
+        pathColorIndex: undefined,
+        isPathH: false,
+        isPathV: false,
+        pathColorIndexH: undefined,
+        pathColorIndexV: undefined,
+        colorIndex: undefined
+      };
+    }));
+    setGrid(cleanGrid);
+    setHistory([]);
+    setMoveHistory([]);
+    setMoveCount(0);
+
+    // Step 3: Show that color's correct solution path with highlight
+    const solutionPath = level.solutionPaths[hintColorIndex];
+    setHintPath(solutionPath);
     setShowingSolution(true);
     setLastHintTime(Date.now());
     setHintsUsed(prev => prev + 1);
     
-    // Hint guideline trails remain active for 12 seconds so they have plenty of time to trace them
-    const displayDuration = 12000;
+    // Auto-hide hint after 4 seconds
+    const displayDuration = 4000;
     setHintUsageCount(prev => prev + 1);
 
     onHintUsed?.();
@@ -354,6 +396,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ currentLevel, onComplete
     if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
     hintTimeoutRef.current = setTimeout(() => {
         setShowingSolution(false);
+        setHintPath(undefined);
         hintTimeoutRef.current = null;
     }, displayDuration);
   };

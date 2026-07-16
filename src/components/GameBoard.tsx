@@ -283,9 +283,14 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       {grid.flat().map((cell, idx) => {
         let cellHintColor: string | undefined = undefined;
         if (showingSolution && level.solutionPaths) {
-          const pathIdx = level.solutionPaths.findIndex(path => path.some(p => p.r === cell.row && p.c === cell.col));
-          if (pathIdx !== -1) {
-            cellHintColor = colors[pathIdx % colors.length];
+          const belongsToHintPath = hintPath 
+            ? hintPath.some(p => p.r === cell.row && p.c === cell.col)
+            : true;
+          if (belongsToHintPath) {
+            const pathIdx = level.solutionPaths.findIndex(path => path.some(p => p.r === cell.row && p.c === cell.col));
+            if (pathIdx !== -1) {
+              cellHintColor = colors[pathIdx % colors.length];
+            }
           }
         }
 
