@@ -38,7 +38,6 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const clearColor = useCallback((colorIndex: number) => {
-    if (showingSolution) return;
     setGrid(grid.map(row => 
       row.map(cell => {
         if (cell.pathColorIndex === colorIndex) {
@@ -47,10 +46,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         return cell;
       })
     ));
-  }, [grid, setGrid, showingSolution]);
+  }, [grid, setGrid]);
 
   const handleCellInteraction = useCallback((r: number, c: number, isInitiating: boolean = false) => {
-    if (showingSolution) return;
     if (r < 0 || r >= grid.length || c < 0 || c >= (grid[r]?.length || 0)) return;
     const cell = grid[r][c];
 
@@ -283,14 +281,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       {grid.flat().map((cell, idx) => {
         let cellHintColor: string | undefined = undefined;
         if (showingSolution && level.solutionPaths) {
-          const belongsToHintPath = hintPath 
-            ? hintPath.some(p => p.r === cell.row && p.c === cell.col)
-            : true;
-          if (belongsToHintPath) {
-            const pathIdx = level.solutionPaths.findIndex(path => path.some(p => p.r === cell.row && p.c === cell.col));
-            if (pathIdx !== -1) {
-              cellHintColor = colors[pathIdx % colors.length];
-            }
+          const pathIdx = level.solutionPaths.findIndex(path => path.some(p => p.r === cell.row && p.c === cell.col));
+          if (pathIdx !== -1) {
+            cellHintColor = colors[pathIdx % colors.length];
           }
         }
 

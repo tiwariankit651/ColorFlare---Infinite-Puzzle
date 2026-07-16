@@ -53,6 +53,13 @@ export const RewardedAd: React.FC<RewardedAdProps> = ({ isVisible, onRewardEarne
     return () => clearInterval(timer);
   }, [isVisible, durationSec, skipSec, onRewardEarned]);
 
+  const handleCloseOrSkip = () => {
+    if (canSkip && !rewardEarned) {
+      onRewardEarned();
+    }
+    onClose();
+  };
+
   if (!isVisible) return null;
 
   return (
@@ -85,7 +92,7 @@ export const RewardedAd: React.FC<RewardedAdProps> = ({ isVisible, onRewardEarne
             {/* Skip / Close Button */}
             {(canSkip || rewardEarned) && (
               <button
-                onClick={onClose}
+                onClick={handleCloseOrSkip}
                 className="flex items-center space-x-1 text-xs bg-white/10 hover:bg-white/20 active:scale-95 transition-all px-3 py-1.5 rounded-full font-medium"
                 id="btn-skip-rewarded"
               >
